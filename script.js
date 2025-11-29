@@ -28,7 +28,7 @@ const db = getFirestore(app);
 const photosCol = collection(db, "photos");
 const ratingsCol = collection(db, "ratings");
 
-// ----- CLAVES DE ACCESO (como antes, en frontend) -----
+// ----- CLAVES DE ACCESO -----
 const PASSWORDS = {
   uploader: "alumno2025",
   expert: "experto2025",
@@ -75,7 +75,7 @@ document.getElementById("login-button").addEventListener("click", () => {
   }
 });
 
-// ----- SUBIDA DE FOTOGRAFÍA (GUARDAR EN FIRESTORE) -----
+// ----- SUBIDA DE FOTOGRAFÍA (FIRESTORE) -----
 const uploadForm = document.getElementById("upload-form");
 const uploadMessage = document.getElementById("upload-message");
 const uploadPreview = document.getElementById("upload-preview");
@@ -246,7 +246,7 @@ async function loadNextPhotoForExpert() {
   }
 }
 
-// Guardar valoración en Firestore
+// Guardar valoración
 document.getElementById("save-rating-button").addEventListener("click", async () => {
   if (!currentPhotoForExpert) return;
 
@@ -292,7 +292,7 @@ document.getElementById("skip-photo-button").addEventListener("click", () => {
   loadNextPhotoForExpert();
 });
 
-// ----- PANEL ADMIN / RESUMEN + EXPORTAR CSV DESDE FIRESTORE -----
+// ----- PANEL ADMIN / RESUMEN + EXPORTAR CSV -----
 async function updateAdminSummary() {
   try {
     const photosSnap = await getDocs(photosCol);
