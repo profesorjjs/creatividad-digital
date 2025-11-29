@@ -103,7 +103,7 @@ const uploadPreview = document.getElementById("upload-preview");
 const previewImage = document.getElementById("preview-image");
 const previewMeta = document.getElementById("preview-meta");
 
-uploadForm.addEventListener("submit", async (e) => {
+uploadForm.addEventListener("submit", (e) => {
   e.preventDefault();
   uploadMessage.textContent = "";
   uploadMessage.className = "message";
@@ -128,40 +128,63 @@ uploadForm.addEventListener("submit", async (e) => {
     return;
   }
 
+  // Indicamos visualmente que está procesando
+  uploadMessage.textContent = "Procesando fotografía...";
+  uploadMessage.className = "message";
+
   const reader = new FileReader();
+
   reader.onload = async function (event) {
     const dataUrl = event.target.result;
 
     try {
       const docRef = await addDoc(photosCol, {
-        dataUrl,
+        dataUrl: dataUrl,
         age: Number(age),
-        gender,
-        studies,
-        bachType,
-        vocation,
+        gender: gender,
+        studies: studies,
+        bachType: bachType,
+        vocation: vocation,
         createdAt: new Date().toISOString()
       });
 
       const photoId = docRef.id;
 
       uploadMessage.textContent = "Fotografía guardada correctamente en la base de datos. ¡Gracias por tu participación!";
-      uploadMessage.classList.add("success");
+      uploadMessage.className = "message success";
 
       uploadPreview.classList.remove("hidden");
       previewImage.src = dataUrl;
-      previewMeta.textContent = `ID: ${photoId} | Edad: ${age} | Sexo: ${gender} | Estudios: ${studies} | Bachillerato: ${bachType || "N/A"}`;
+      previewMeta.textContent =
+        "ID: " + photoId +
+        " | Edad: " + age +
+        " | Sexo: " + gender +
+        " | Estudios: " + studies +
+        " | Bachillerato: " + (bachType || "N/A");
 
       uploadForm.reset();
       document.getElementById("bach-type").value = "";
     } catch (err) {
-      console.error(err);
-      uploadMessage.textContent = "Ha ocurrido un error al guardar la fotografía.";
-      uploadMessage.classList.add("error");
+      console.error("Error al guardar en Firestore:", err);
+      uploadMessage.textContent =
+        "Ha ocurrido un error al guardar la fotografía: " + (err && err.message ? err.message : "");
+      uploadMessage.className = "message error";
     }
   };
 
-  reader.readAsDataURL(file);
+  reader.onerror = function (event) {
+    console.error("Error al leer el archivo con FileReader:", event);
+    uploadMessage.textContent = "No se ha podido leer la fotografía en este navegador.";
+    uploadMessage.className = "message error";
+  };
+
+  try {
+    reader.readAsDataURL(file);
+  } catch (err) {
+    console.error("Excepción al iniciar FileReader:", err);
+    uploadMessage.textContent = "Ha ocurrido un error al procesar la fotografía.";
+    uploadMessage.className = "message error";
+  }
 });
 
 // ----- VALORACIÓN POR EXPERTOS -----
