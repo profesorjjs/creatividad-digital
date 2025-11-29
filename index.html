@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Evaluación de Creatividad Digital</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="header">
+    <h1>Evaluación de Creatividad Digital</h1>
+    <p class="subtitle">Plataforma para subida y valoración de fotografías en contexto educativo</p>
+  </header>
+
+  <main class="container">
+    <!-- Selección de rol / acceso -->
+    <section id="login-section" class="card">
+      <h2>Acceso</h2>
+      <p>Selecciona tu tipo de acceso e introduce la clave correspondiente.</p>
+
+      <label for="role-select">Soy:</label>
+      <select id="role-select">
+        <option value="">Selecciona una opción</option>
+        <option value="uploader">Alumno/a (subir fotografía)</option>
+        <option value="expert">Experto/a (valorar fotografías)</option>
+        <option value="admin">Investigador/a (gestión de datos)</option>
+      </select>
+
+      <label for="access-password">Clave de acceso:</label>
+      <input type="password" id="access-password" placeholder="Introduce la clave">
+
+      <button id="login-button">Entrar</button>
+
+      <p class="note">
+        Esta plataforma se utiliza en el marco de un estudio sobre creatividad digital en el ámbito educativo.
+        No compartas las claves con personas no autorizadas.
+      </p>
+    </section>
+
+    <!-- Sección subida de fotografía -->
+    <section id="upload-section" class="card hidden">
+      <h2>Subida de fotografía</h2>
+      <p>Sube una fotografía en formato JPG y completa los datos de contexto.</p>
+
+      <form id="upload-form">
+        <div class="form-group">
+          <label for="photo-file">Fotografía (JPG, máximo 5 MB):</label>
+          <input type="file" id="photo-file" accept="image/jpeg,image/jpg" required>
+        </div>
+
+        <div class="form-group">
+          <label for="age">Edad:</label>
+          <input type="number" id="age" min="10" max="25" required>
+        </div>
+
+        <div class="form-group">
+          <label for="gender">Sexo:</label>
+          <select id="gender" required>
+            <option value="">Selecciona</option>
+            <option value="Mujer">Mujer</option>
+            <option value="Hombre">Hombre</option>
+            <option value="No binario">No binario</option>
+            <option value="Prefiero no decirlo">Prefiero no decirlo</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="studies">Estudios actuales:</label>
+          <select id="studies" required>
+            <option value="">Selecciona</option>
+            <option value="ESO">ESO</option>
+            <option value="Bachillerato">Bachillerato</option>
+            <option value="Ciclo formativo">Ciclo formativo</option>
+            <option value="Otros">Otros</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="bach-type">Tipo de Bachillerato (si procede):</label>
+          <select id="bach-type" required>
+            <option value="">Selecciona</option>
+            <option value="No aplica">No aplica</option>
+            <option value="Ciencias">Ciencias</option>
+            <option value="Humanidades y Ciencias Sociales">Humanidades y Ciencias Sociales</option>
+            <option value="Artes">Artes</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="vocation">Vocación o área de interés (opcional):</label>
+          <input type="text" id="vocation" maxlength="100" placeholder="Ej.: Medicina, Diseño, Ingeniería...">
+        </div>
+
+        <div class="consent-box">
+          <p><strong>Importante:</strong> No subas fotografías donde se identifique claramente a personas sin su permiso. Las imágenes se utilizarán exclusivamente con fines de investigación educativa.</p>
+        </div>
+
+        <button type="submit">Enviar fotografía</button>
+      </form>
+
+      <div id="upload-message" class="message"></div>
+      <div id="upload-preview" class="preview hidden">
+        <h3>Vista previa de tu fotografía</h3>
+        <img id="preview-image" alt="Vista previa">
+        <p id="preview-meta"></p>
+      </div>
+    </section>
+
+    <!-- Sección valoración por expertos -->
+    <section id="expert-section" class="card hidden">
+      <h2>Valoración de fotografías</h2>
+
+      <div class="form-group">
+        <label for="expert-id">Tu código de experto/a:</label>
+        <input type="text" id="expert-id" placeholder="Ej.: EXP01" required>
+      </div>
+
+      <button id="start-rating-button">Comenzar / Continuar valoración</button>
+
+      <div id="rating-area" class="hidden">
+        <div id="no-photos-message" class="message hidden">
+          No hay fotografías pendientes de valorar. Vuelve a intentarlo más tarde.
+        </div>
+
+        <div id="photo-rating-card" class="rating-card hidden">
+          <h3>Fotografía a valorar</h3>
+          <img id="rating-photo" alt="Fotografía a valorar">
+          <p id="rating-photo-info"></p>
+
+          <h4>Subescalas de creatividad digital (1 = muy bajo, 10 = muy alto)</h4>
+
+          <div class="rating-item">
+            <label for="sub1">1. Originalidad y novedad:</label>
+            <input type="range" id="sub1" min="1" max="10" value="5">
+            <span id="sub1-value">5</span>
+          </div>
+
+          <div class="rating-item">
+            <label for="sub2">2. Expresión creativa y emocional:</label>
+            <input type="range" id="sub2" min="1" max="10" value="5">
+            <span id="sub2-value">5</span>
+          </div>
+
+          <div class="rating-item">
+            <label for="sub3">3. Uso innovador de técnicas digitales:</label>
+            <input type="range" id="sub3" min="1" max="10" value="5">
+            <span id="sub3-value">5</span>
+          </div>
+
+          <div class="rating-item">
+            <label for="sub4">4. Composición visual y técnica:</label>
+            <input type="range" id="sub4" min="1" max="10" value="5">
+            <span id="sub4-value">5</span>
+          </div>
+
+          <div class="rating-item">
+            <label for="sub5">5. Interacción y cocreación:</label>
+            <input type="range" id="sub5" min="1" max="10" value="5">
+            <span id="sub5-value">5</span>
+          </div>
+
+          <p class="puntf">PUNTF (media de subescalas): <span id="puntf-value">5.0</span></p>
+
+          <div class="rating-buttons">
+            <button id="save-rating-button">Guardar valoración y siguiente</button>
+            <button id="skip-photo-button" class="secondary">Omitir fotografía</button>
+          </div>
+
+          <p id="rating-message" class="message"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sección administración / exportación -->
+    <section id="admin-section" class="card hidden">
+      <h2>Panel de investigación</h2>
+      <p>Desde aquí puedes exportar los datos de fotografías y valoraciones en formato CSV para analizarlos estadísticamente.</p>
+
+      <button id="export-csv-button">Descargar CSV</button>
+      <p class="note">El archivo incluirá una fila por combinación fotografía × experto/a, con las 5 subvaloraciones y la PUNTF.</p>
+
+      <h3>Resumen rápido</h3>
+      <ul id="admin-summary-list"></ul>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>Plataforma experimental de evaluación de creatividad digital en contextos educativos.</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
