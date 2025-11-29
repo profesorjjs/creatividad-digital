@@ -38,9 +38,12 @@
     </section>
 
     <!-- Sección subida de fotografía -->
-    <section id="upload-section" class="card hidden">
-      <h2>Subida de fotografía</h2>
-      <p>Sube una fotografía en formato JPG y completa los datos de contexto.</p>
+   <section id="upload-section" class="card hidden">
+  <div class="section-top">
+    <h2>Subida de fotografía</h2>
+    <button type="button" class="back-button">Volver al inicio</button>
+  </div>
+  <p>Sube una fotografía en formato JPG y completa los datos de contexto.</p>
 
       <form id="upload-form">
         <div class="form-group">
@@ -107,8 +110,11 @@
     </section>
 
     <!-- Sección valoración por expertos -->
-    <section id="expert-section" class="card hidden">
-      <h2>Valoración de fotografías</h2>
+   <section id="expert-section" class="card hidden">
+  <div class="section-top">
+    <h2>Valoración de fotografías</h2>
+    <button type="button" class="back-button">Volver al inicio</button>
+  </div>
 
       <div class="form-group">
         <label for="expert-id">Tu código de experto/a:</label>
@@ -173,8 +179,11 @@
 
     <!-- Sección administración / exportación -->
     <section id="admin-section" class="card hidden">
-      <h2>Panel de investigación</h2>
-      <p>Desde aquí puedes exportar los datos de fotografías y valoraciones en formato CSV para analizarlos estadísticamente.</p>
+  <div class="section-top">
+    <h2>Panel de investigación</h2>
+    <button type="button" class="back-button">Volver al inicio</button>
+  </div>
+  <p>Desde aquí puedes exportar los datos de fotografías y valoraciones en formato CSV para analizarlos estadísticamente.</p>
 
       <button id="export-csv-button">Descargar CSV</button>
       <p class="note">El archivo incluirá una fila por combinación fotografía × experto/a, con las 5 subvaloraciones y la PUNTF.</p>

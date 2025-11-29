@@ -183,3 +183,23 @@ button.secondary:hover {
     font-size: 1.4rem;
   }
 }
+.section-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.back-button {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.back-button:hover {
+  color: #303f9f;
+}

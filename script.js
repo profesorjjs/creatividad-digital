@@ -41,6 +41,27 @@ const uploadSection = document.getElementById("upload-section");
 const expertSection = document.getElementById("expert-section");
 const adminSection = document.getElementById("admin-section");
 
+// Botones "Volver al inicio"
+const backButtons = document.querySelectorAll(".back-button");
+backButtons.forEach(btn => {
+  btn.addEventListener("click", () => {
+    // Ocultar secciones de roles
+    uploadSection.classList.add("hidden");
+    expertSection.classList.add("hidden");
+    adminSection.classList.add("hidden");
+
+    // Mostrar de nuevo la pantalla de login
+    loginSection.classList.remove("hidden");
+
+    // Resetear selector y contraseña
+    const roleSelect = document.getElementById("role-select");
+    const accessPassword = document.getElementById("access-password");
+    if (roleSelect) roleSelect.value = "";
+    if (accessPassword) accessPassword.value = "";
+  });
+});
+
+
 function showSection(sectionId) {
   [uploadSection, expertSection, adminSection].forEach(sec => sec.classList.add("hidden"));
   if (sectionId === "upload") uploadSection.classList.remove("hidden");
