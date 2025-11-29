@@ -12,12 +12,6 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
 // ----- CONFIGURACIÓN DE TU PROYECTO FIREBASE -----
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyAZdspFCOgzOPKPQ63b2MTs4ZjZz8QoBtg",
   authDomain: "creatividad-digital.firebaseapp.com",
@@ -27,7 +21,6 @@ const firebaseConfig = {
   appId: "1:152517888172:web:c81a4ff025f68925453709"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
@@ -114,7 +107,6 @@ uploadForm.addEventListener("submit", async (e) => {
     return;
   }
 
-  // Leemos la foto como DataURL (base64) para guardarla en Firestore
   const reader = new FileReader();
   reader.onload = async function (event) {
     const dataUrl = event.target.result;
@@ -151,7 +143,7 @@ uploadForm.addEventListener("submit", async (e) => {
   reader.readAsDataURL(file);
 });
 
-// ----- VALORACIÓN POR EXPERTOS (FOTOS DESDE FIRESTORE) -----
+// ----- VALORACIÓN POR EXPERTOS -----
 const sub1 = document.getElementById("sub1");
 const sub2 = document.getElementById("sub2");
 const sub3 = document.getElementById("sub3");
@@ -204,14 +196,12 @@ async function loadNextPhotoForExpert() {
   if (!expertId) return;
 
   try {
-    // 1) Traemos TODAS las fotos
     const photosSnap = await getDocs(photosCol);
     const photos = photosSnap.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
 
-    // 2) Traemos las valoraciones de este experto
     const ratingsSnap = await getDocs(
       query(ratingsCol, where("expertId", "==", expertId))
     );
@@ -220,7 +210,6 @@ async function loadNextPhotoForExpert() {
       ratingsSnap.docs.map(d => d.data().photoId)
     );
 
-    // 3) Filtramos fotos pendientes
     const pending = photos.filter(p => !ratedPhotoIds.has(p.id));
 
     if (pending.length === 0) {
@@ -346,7 +335,6 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
       photos[doc.id] = doc.data();
     });
 
-    // Cabecera similar a la que comentábamos
     const header = [
       "fotoId",
       "sexo",
@@ -408,7 +396,6 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
       });
     }
 
-    // CSV con punto y coma para que Excel España lo abra en columnas
     const csvContent = rows.map(row =>
       row.map(value => {
         const str = String(value ?? "");
