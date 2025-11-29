@@ -61,6 +61,52 @@ backButtons.forEach(btn => {
   });
 });
 
+// Función para redimensionar y comprimir la imagen antes de subirla
+function resizeImage(file, maxWidth = 1024, maxHeight = 1024, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = function (event) {
+      const img = new Image();
+      img.onload = function () {
+        let width = img.width;
+        let height = img.height;
+
+        // Mantener proporción
+        const scale = Math.min(maxWidth / width, maxHeight / height, 1);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        try {
+          const dataUrl = canvas.toDataURL("image/jpeg", quality);
+          resolve(dataUrl);
+        } catch (err) {
+          reject(err);
+        }
+      };
+
+      img.onerror = function (err) {
+        reject(err);
+      };
+
+      img.src = event.target.result;
+    };
+
+    reader.onerror = function (err) {
+      reject(err);
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
 
 function showSection(sectionId) {
   [uploadSection, expertSection, adminSection].forEach(sec => sec.classList.add("hidden"));
@@ -103,7 +149,7 @@ const uploadPreview = document.getElementById("upload-preview");
 const previewImage = document.getElementById("preview-image");
 const previewMeta = document.getElementById("preview-meta");
 
-uploadForm.addEventListener("submit", (e) => {
+uploadForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   uploadMessage.textContent = "";
   uploadMessage.className = "message";
@@ -122,70 +168,62 @@ uploadForm.addEventListener("submit", (e) => {
   }
 
   const file = fileInput.files[0];
-  if (file.size > 5 * 1024 * 1024) {
-    uploadMessage.textContent = "La fotografía supera el tamaño máximo de 5 MB.";
+  if (file.size > 20 * 1024 * 1024) {
+    // Por si acaso alguien sube una burrada de 20 MB
+    uploadMessage.textContent = "La fotografía es demasiado grande. Selecciona una imagen más ligera.";
     uploadMessage.classList.add("error");
     return;
   }
 
-  // Indicamos visualmente que está procesando
   uploadMessage.textContent = "Procesando fotografía...";
   uploadMessage.className = "message";
 
-  const reader = new FileReader();
-
-  reader.onload = async function (event) {
-    const dataUrl = event.target.result;
-
-    try {
-      const docRef = await addDoc(photosCol, {
-        dataUrl: dataUrl,
-        age: Number(age),
-        gender: gender,
-        studies: studies,
-        bachType: bachType,
-        vocation: vocation,
-        createdAt: new Date().toISOString()
-      });
-
-      const photoId = docRef.id;
-
-      uploadMessage.textContent = "Fotografía guardada correctamente en la base de datos. ¡Gracias por tu participación!";
-      uploadMessage.className = "message success";
-
-      uploadPreview.classList.remove("hidden");
-      previewImage.src = dataUrl;
-      previewMeta.textContent =
-        "ID: " + photoId +
-        " | Edad: " + age +
-        " | Sexo: " + gender +
-        " | Estudios: " + studies +
-        " | Bachillerato: " + (bachType || "N/A");
-
-      uploadForm.reset();
-      document.getElementById("bach-type").value = "";
-    } catch (err) {
-      console.error("Error al guardar en Firestore:", err);
-      uploadMessage.textContent =
-        "Ha ocurrido un error al guardar la fotografía: " + (err && err.message ? err.message : "");
-      uploadMessage.className = "message error";
-    }
-  };
-
-  reader.onerror = function (event) {
-    console.error("Error al leer el archivo con FileReader:", event);
-    uploadMessage.textContent = "No se ha podido leer la fotografía en este navegador.";
-    uploadMessage.className = "message error";
-  };
-
   try {
-    reader.readAsDataURL(file);
+    // Redimensionar y comprimir antes de guardar
+    const dataUrl = await resizeImage(file, 1024, 1024, 0.7);
+
+    // Comprobamos tamaño aproximado del dataUrl (en caracteres)
+    if (dataUrl.length > 900000) {
+      uploadMessage.textContent =
+        "La fotografía sigue siendo demasiado pesada incluso tras comprimirla. Prueba con una imagen más pequeña.";
+      uploadMessage.classList.add("error");
+      return;
+    }
+
+    const docRef = await addDoc(photosCol, {
+      dataUrl: dataUrl,
+      age: Number(age),
+      gender: gender,
+      studies: studies,
+      bachType: bachType,
+      vocation: vocation,
+      createdAt: new Date().toISOString()
+    });
+
+    const photoId = docRef.id;
+
+    uploadMessage.textContent = "Fotografía guardada correctamente en la base de datos. ¡Gracias por tu participación!";
+    uploadMessage.className = "message success";
+
+    uploadPreview.classList.remove("hidden");
+    previewImage.src = dataUrl;
+    previewMeta.textContent =
+      "ID: " + photoId +
+      " | Edad: " + age +
+      " | Sexo: " + gender +
+      " | Estudios: " + studies +
+      " | Bachillerato: " + (bachType || "N/A");
+
+    uploadForm.reset();
+    document.getElementById("bach-type").value = "";
   } catch (err) {
-    console.error("Excepción al iniciar FileReader:", err);
-    uploadMessage.textContent = "Ha ocurrido un error al procesar la fotografía.";
-    uploadMessage.className = "message error";
+    console.error("Error al procesar o guardar la fotografía:", err);
+    uploadMessage.textContent =
+      "Ha ocurrido un error al guardar la fotografía: " + (err && err.message ? err.message : "");
+    uploadMessage.classList.add("error");
   }
 });
+
 
 // ----- VALORACIÓN POR EXPERTOS -----
 const sub1 = document.getElementById("sub1");
