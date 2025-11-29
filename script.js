@@ -1,30 +1,48 @@
-// --- Configuración básica de claves (prototipo) ---
+// script.js (versión con Firebase + Firestore)
+
+// ----- IMPORTS DE FIREBASE DESDE CDN -----
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  where
+} from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+
+// ----- CONFIGURACIÓN DE TU PROYECTO FIREBASE -----
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyAZdspFCOgzOPKPQ63b2MTs4ZjZz8QoBtg",
+  authDomain: "creatividad-digital.firebaseapp.com",
+  projectId: "creatividad-digital",
+  storageBucket: "creatividad-digital.firebasestorage.app",
+  messagingSenderId: "152517888172",
+  appId: "1:152517888172:web:c81a4ff025f68925453709"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// Colecciones en Firestore
+const photosCol = collection(db, "photos");
+const ratingsCol = collection(db, "ratings");
+
+// ----- CLAVES DE ACCESO (como antes, en frontend) -----
 const PASSWORDS = {
   uploader: "alumno2025",
   expert: "experto2025",
   admin: "admin2025"
 };
 
-// --- Utilidades de almacenamiento en localStorage ---
-function getStoredArray(key) {
-  const raw = localStorage.getItem(key);
-  if (!raw) return [];
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
-}
-
-function setStoredArray(key, arr) {
-  localStorage.setItem(key, JSON.stringify(arr));
-}
-
-// Claves de almacenamiento
-const PHOTOS_KEY = "cd_photos";
-const RATINGS_KEY = "cd_ratings";
-
-// --- Gestión de secciones ---
+// ----- GESTIÓN DE SECCIONES -----
 const loginSection = document.getElementById("login-section");
 const uploadSection = document.getElementById("upload-section");
 const expertSection = document.getElementById("expert-section");
@@ -37,7 +55,7 @@ function showSection(sectionId) {
   if (sectionId === "admin") adminSection.classList.remove("hidden");
 }
 
-// --- Login / acceso por rol ---
+// ----- LOGIN / ACCESO POR ROL -----
 document.getElementById("login-button").addEventListener("click", () => {
   const role = document.getElementById("role-select").value;
   const password = document.getElementById("access-password").value.trim();
@@ -52,8 +70,8 @@ document.getElementById("login-button").addEventListener("click", () => {
     return;
   }
 
-  // Acceso concedido
   loginSection.classList.add("hidden");
+
   if (role === "uploader") {
     showSection("upload");
   } else if (role === "expert") {
@@ -64,14 +82,14 @@ document.getElementById("login-button").addEventListener("click", () => {
   }
 });
 
-// --- Subida de fotografía ---
+// ----- SUBIDA DE FOTOGRAFÍA (GUARDAR EN FIRESTORE) -----
 const uploadForm = document.getElementById("upload-form");
 const uploadMessage = document.getElementById("upload-message");
 const uploadPreview = document.getElementById("upload-preview");
 const previewImage = document.getElementById("preview-image");
 const previewMeta = document.getElementById("preview-meta");
 
-uploadForm.addEventListener("submit", (e) => {
+uploadForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   uploadMessage.textContent = "";
   uploadMessage.className = "message";
@@ -96,46 +114,44 @@ uploadForm.addEventListener("submit", (e) => {
     return;
   }
 
-  // Convertimos la imagen a URL local (DataURL) para el prototipo
+  // Leemos la foto como DataURL (base64) para guardarla en Firestore
   const reader = new FileReader();
-  reader.onload = function (event) {
+  reader.onload = async function (event) {
     const dataUrl = event.target.result;
 
-    // Creamos un ID sencillo para la foto
-    const photoId = "F" + Date.now();
+    try {
+      const docRef = await addDoc(photosCol, {
+        dataUrl,
+        age: Number(age),
+        gender,
+        studies,
+        bachType,
+        vocation,
+        createdAt: new Date().toISOString()
+      });
 
-    const photo = {
-      id: photoId,
-      dataUrl,
-      age: Number(age),
-      gender,
-      studies,
-      bachType,
-      vocation,
-      createdAt: new Date().toISOString()
-    };
+      const photoId = docRef.id;
 
-    const photos = getStoredArray(PHOTOS_KEY);
-    photos.push(photo);
-    setStoredArray(PHOTOS_KEY, photos);
+      uploadMessage.textContent = "Fotografía guardada correctamente en la base de datos. ¡Gracias por tu participación!";
+      uploadMessage.classList.add("success");
 
-    uploadMessage.textContent = "Fotografía guardada correctamente. ¡Gracias por tu participación!";
-    uploadMessage.classList.add("success");
+      uploadPreview.classList.remove("hidden");
+      previewImage.src = dataUrl;
+      previewMeta.textContent = `ID: ${photoId} | Edad: ${age} | Sexo: ${gender} | Estudios: ${studies} | Bachillerato: ${bachType || "N/A"}`;
 
-    // Mostrar vista previa
-    uploadPreview.classList.remove("hidden");
-    previewImage.src = dataUrl;
-    previewMeta.textContent = `ID: ${photoId} | Edad: ${age} | Sexo: ${gender} | Estudios: ${studies} | Bachillerato: ${bachType || "N/A"}`;
-
-    // Resetear formulario
-    uploadForm.reset();
-    document.getElementById("bach-type").value = "";
+      uploadForm.reset();
+      document.getElementById("bach-type").value = "";
+    } catch (err) {
+      console.error(err);
+      uploadMessage.textContent = "Ha ocurrido un error al guardar la fotografía.";
+      uploadMessage.classList.add("error");
+    }
   };
 
   reader.readAsDataURL(file);
 });
 
-// --- Valoración por expertos ---
+// ----- VALORACIÓN POR EXPERTOS (FOTOS DESDE FIRESTORE) -----
 const sub1 = document.getElementById("sub1");
 const sub2 = document.getElementById("sub2");
 const sub3 = document.getElementById("sub3");
@@ -165,8 +181,8 @@ function updatePuntf() {
 }
 
 [sub1, sub2, sub3, sub4, sub5].forEach((input, index) => {
+  const spans = [sub1Value, sub2Value, sub3Value, sub4Value, sub5Value];
   input.addEventListener("input", () => {
-    const spans = [sub1Value, sub2Value, sub3Value, sub4Value, sub5Value];
     spans[index].textContent = input.value;
     updatePuntf();
   });
@@ -183,52 +199,66 @@ document.getElementById("start-rating-button").addEventListener("click", () => {
   loadNextPhotoForExpert();
 });
 
-function loadNextPhotoForExpert() {
+async function loadNextPhotoForExpert() {
   const expertId = document.getElementById("expert-id").value.trim();
   if (!expertId) return;
 
-  const photos = getStoredArray(PHOTOS_KEY);
-  const ratings = getStoredArray(RATINGS_KEY);
+  try {
+    // 1) Traemos TODAS las fotos
+    const photosSnap = await getDocs(photosCol);
+    const photos = photosSnap.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
 
-  // Filtrar fotos ya valoradas por este experto
-  const ratedPhotoIds = new Set(
-    ratings.filter(r => r.expertId === expertId).map(r => r.photoId)
-  );
+    // 2) Traemos las valoraciones de este experto
+    const ratingsSnap = await getDocs(
+      query(ratingsCol, where("expertId", "==", expertId))
+    );
 
-  // Elegimos una foto pendiente al azar
-  const pending = photos.filter(p => !ratedPhotoIds.has(p.id));
+    const ratedPhotoIds = new Set(
+      ratingsSnap.docs.map(d => d.data().photoId)
+    );
 
-  if (pending.length === 0) {
-    currentPhotoForExpert = null;
-    photoRatingCard.classList.add("hidden");
-    noPhotosMessage.classList.remove("hidden");
+    // 3) Filtramos fotos pendientes
+    const pending = photos.filter(p => !ratedPhotoIds.has(p.id));
+
+    if (pending.length === 0) {
+      currentPhotoForExpert = null;
+      photoRatingCard.classList.add("hidden");
+      noPhotosMessage.classList.remove("hidden");
+      ratingMessage.textContent = "";
+      return;
+    }
+
+    noPhotosMessage.classList.add("hidden");
+    photoRatingCard.classList.remove("hidden");
+
+    const randomIndex = Math.floor(Math.random() * pending.length);
+    const photo = pending[randomIndex];
+    currentPhotoForExpert = photo;
+
+    ratingPhoto.src = photo.dataUrl;
+    ratingPhotoInfo.textContent =
+      `ID: ${photo.id} | Edad: ${photo.age} | Sexo: ${photo.gender} | ` +
+      `Estudios: ${photo.studies} | Bachillerato: ${photo.bachType}`;
+
+    [sub1, sub2, sub3, sub4, sub5].forEach(slider => { slider.value = 5; });
+    [sub1Value, sub2Value, sub3Value, sub4Value, sub5Value].forEach(span => {
+      span.textContent = "5";
+    });
+    updatePuntf();
     ratingMessage.textContent = "";
-    return;
+  } catch (err) {
+    console.error(err);
+    noPhotosMessage.textContent = "Error cargando fotografías.";
+    noPhotosMessage.classList.remove("hidden");
+    photoRatingCard.classList.add("hidden");
   }
-
-  noPhotosMessage.classList.add("hidden");
-  photoRatingCard.classList.remove("hidden");
-
-  const randomIndex = Math.floor(Math.random() * pending.length);
-  const photo = pending[randomIndex];
-  currentPhotoForExpert = photo;
-
-  ratingPhoto.src = photo.dataUrl;
-  ratingPhotoInfo.textContent = `ID: ${photo.id} | Edad: ${photo.age} | Sexo: ${photo.gender} | Estudios: ${photo.studies} | Bachillerato: ${photo.bachType}`;
-
-  // Reset de sliders
-  [sub1, sub2, sub3, sub4, sub5].forEach(slider => {
-    slider.value = 5;
-  });
-  [sub1Value, sub2Value, sub3Value, sub4Value, sub5Value].forEach(span => {
-    span.textContent = "5";
-  });
-  updatePuntf();
-  ratingMessage.textContent = "";
 }
 
-// Guardar valoración
-document.getElementById("save-rating-button").addEventListener("click", () => {
+// Guardar valoración en Firestore
+document.getElementById("save-rating-button").addEventListener("click", async () => {
   if (!currentPhotoForExpert) return;
 
   const expertId = document.getElementById("expert-id").value.trim();
@@ -244,161 +274,165 @@ document.getElementById("save-rating-button").addEventListener("click", () => {
   const v5 = Number(sub5.value);
   const puntf = (v1 + v2 + v3 + v4 + v5) / 5;
 
-  const rating = {
-    photoId: currentPhotoForExpert.id,
-    expertId,
-    sub1: v1,
-    sub2: v2,
-    sub3: v3,
-    sub4: v4,
-    sub5: v5,
-    puntf,
-    createdAt: new Date().toISOString()
-  };
+  try {
+    await addDoc(ratingsCol, {
+      photoId: currentPhotoForExpert.id,
+      expertId,
+      sub1: v1,
+      sub2: v2,
+      sub3: v3,
+      sub4: v4,
+      sub5: v5,
+      puntf,
+      createdAt: new Date().toISOString()
+    });
 
-  const ratings = getStoredArray(RATINGS_KEY);
-  ratings.push(rating);
-  setStoredArray(RATINGS_KEY, ratings);
+    ratingMessage.textContent = "Valoración guardada.";
+    ratingMessage.className = "message success";
 
-  ratingMessage.textContent = "Valoración guardada.";
-  ratingMessage.className = "message success";
-
-  // Cargar siguiente foto
-  loadNextPhotoForExpert();
+    loadNextPhotoForExpert();
+  } catch (err) {
+    console.error(err);
+    ratingMessage.textContent = "Error al guardar la valoración.";
+    ratingMessage.className = "message error";
+  }
 });
 
-// Omitir foto (no guarda nada)
+// Omitir foto
 document.getElementById("skip-photo-button").addEventListener("click", () => {
   loadNextPhotoForExpert();
 });
 
-// --- Panel de administración / exportar CSV ---
-function updateAdminSummary() {
-  const photos = getStoredArray(PHOTOS_KEY);
-  const ratings = getStoredArray(RATINGS_KEY);
+// ----- PANEL ADMIN / RESUMEN + EXPORTAR CSV DESDE FIRESTORE -----
+async function updateAdminSummary() {
+  try {
+    const photosSnap = await getDocs(photosCol);
+    const ratingsSnap = await getDocs(ratingsCol);
 
-  const summaryList = document.getElementById("admin-summary-list");
-  summaryList.innerHTML = "";
+    const summaryList = document.getElementById("admin-summary-list");
+    summaryList.innerHTML = "";
 
-  const li1 = document.createElement("li");
-  li1.textContent = `Número de fotografías almacenadas: ${photos.length}`;
-  summaryList.appendChild(li1);
+    const li1 = document.createElement("li");
+    li1.textContent = `Número de fotografías almacenadas: ${photosSnap.size}`;
+    summaryList.appendChild(li1);
 
-  const li2 = document.createElement("li");
-  li2.textContent = `Número total de valoraciones registradas: ${ratings.length}`;
-  summaryList.appendChild(li2);
+    const li2 = document.createElement("li");
+    li2.textContent = `Número total de valoraciones registradas: ${ratingsSnap.size}`;
+    summaryList.appendChild(li2);
 
-  const expertIds = Array.from(new Set(ratings.map(r => r.expertId)));
-  const li3 = document.createElement("li");
-  li3.textContent = `Número de expertos/as activos: ${expertIds.length}`;
-  summaryList.appendChild(li3);
+    const expertIds = Array.from(
+      new Set(ratingsSnap.docs.map(d => d.data().expertId))
+    );
+    const li3 = document.createElement("li");
+    li3.textContent = `Número de expertos/as activos: ${expertIds.length}`;
+    summaryList.appendChild(li3);
+  } catch (err) {
+    console.error(err);
+  }
 }
 
-// Exportar CSV
-document.getElementById("export-csv-button").addEventListener("click", () => {
-  const photos = getStoredArray(PHOTOS_KEY);
-  const ratings = getStoredArray(RATINGS_KEY);
+document.getElementById("export-csv-button").addEventListener("click", async () => {
+  try {
+    const photosSnap = await getDocs(photosCol);
+    const ratingsSnap = await getDocs(ratingsCol);
 
-  if (photos.length === 0) {
-    alert("No hay fotografías almacenadas.");
-    return;
-  }
+    if (photosSnap.empty) {
+      alert("No hay fotografías almacenadas.");
+      return;
+    }
 
-  if (ratings.length === 0) {
-    const proceed = confirm("No hay valoraciones registradas. ¿Quieres exportar sólo los datos de las fotografías?");
-    if (!proceed) return;
-  }
-
-  // Creamos un diccionario de fotos por ID
-  const photoMap = {};
-  photos.forEach(p => {
-    photoMap[p.id] = p;
-  });
-
-  // Cabecera
-  const header = [
-    "fotoId",
-    "sexo",
-    "edad",
-    "estudios",
-    "tipoBach",
-    "vocacion",
-    "expertoId",
-    "sub1_originalidad",
-    "sub2_expresion",
-    "sub3_tecnicas_digitales",
-    "sub4_composicion",
-    "sub5_interaccion",
-    "puntf"
-  ];
-
-  const rows = [];
-  rows.push(header);
-
-  if (ratings.length === 0) {
-    // Sólo filas de fotos sin valoraciones (expertId vacío)
-    photos.forEach(p => {
-      rows.push([
-        p.id,
-        p.gender,
-        p.age,
-        p.studies,
-        p.bachType,
-        p.vocation || "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        ""
-      ]);
+    const photos = {};
+    photosSnap.docs.forEach(doc => {
+      photos[doc.id] = doc.data();
     });
-  } else {
-    // Una fila por valoración
-    ratings.forEach(r => {
-      const p = photoMap[r.photoId];
-      if (!p) return; // Por si acaso
 
-      rows.push([
-        p.id,
-        p.gender,
-        p.age,
-        p.studies,
-        p.bachType,
-        p.vocation || "",
-        r.expertId,
-        r.sub1,
-        r.sub2,
-        r.sub3,
-        r.sub4,
-        r.sub5,
-        r.puntf.toFixed(2)
-      ]);
-    });
+    // Cabecera similar a la que comentábamos
+    const header = [
+      "fotoId",
+      "sexo",
+      "edad",
+      "estudios",
+      "tipoBach",
+      "vocacion",
+      "expertoId",
+      "sub1_originalidad",
+      "sub2_expresion",
+      "sub3_tecnicas_digitales",
+      "sub4_composicion",
+      "sub5_interaccion",
+      "puntf"
+    ];
+
+    const rows = [];
+    rows.push(header);
+
+    if (ratingsSnap.empty) {
+      Object.entries(photos).forEach(([id, p]) => {
+        rows.push([
+          id,
+          p.gender,
+          p.age,
+          p.studies,
+          p.bachType,
+          p.vocation || "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]);
+      });
+    } else {
+      ratingsSnap.docs.forEach(doc => {
+        const r = doc.data();
+        const p = photos[r.photoId];
+        if (!p) return;
+
+        rows.push([
+          r.photoId,
+          p.gender,
+          p.age,
+          p.studies,
+          p.bachType,
+          p.vocation || "",
+          r.expertId,
+          r.sub1,
+          r.sub2,
+          r.sub3,
+          r.sub4,
+          r.sub5,
+          r.puntf.toFixed(2)
+        ]);
+      });
+    }
+
+    // CSV con punto y coma para que Excel España lo abra en columnas
+    const csvContent = rows.map(row =>
+      row.map(value => {
+        const str = String(value ?? "");
+        if (str.includes(";") || str.includes("\"")) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      }).join(";")
+    ).join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const now = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    a.download = `creatividad_digital_${now}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    alert("CSV generado y descargado.");
+  } catch (err) {
+    console.error(err);
+    alert("Ha ocurrido un error al generar el CSV.");
   }
-
-  // Construimos el CSV
-  const csvContent = rows.map(row =>
-    row.map(value => {
-      const str = String(value ?? "");
-      if (str.includes(",") || str.includes("\"")) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    }).join(";")
-  ).join("\n");
-
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  const now = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-  a.download = `creatividad_digital_${now}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-
-  alert("CSV generado y descargado.");
 });
