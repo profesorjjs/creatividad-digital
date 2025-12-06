@@ -56,6 +56,10 @@ const centerWrapper = document.getElementById("center-wrapper");
 const askCenterToggle = document.getElementById("ask-center-toggle");
 const studiesSelect = document.getElementById("studies");
 const bachWrapper = document.getElementById("bach-wrapper");
+const ageChart = document.getElementById("age-chart");
+const ageChartNote = document.getElementById("age-chart-note");
+const loadPhotosButton = document.getElementById("load-photos-button");
+const photosList = document.getElementById("photos-list");
 
 // Botones "Volver al inicio"
 const backButtons = document.querySelectorAll(".back-button");
@@ -146,7 +150,8 @@ if (askCenterToggle) {
 }
 
 // Función para redimensionar y comprimir la imagen antes de subirla
-function resizeImage(file, maxWidth = 1024, maxHeight = 1024, quality = 0.7) {
+// -> máximo 1920 px en el lado más ancho.
+function resizeImage(file, maxWidth = 1920, maxHeight = 1920, quality = 0.7) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
@@ -156,7 +161,6 @@ function resizeImage(file, maxWidth = 1024, maxHeight = 1024, quality = 0.7) {
         let width = img.width;
         let height = img.height;
 
-        // Mantener proporción
         const scale = Math.min(maxWidth / width, maxHeight / height, 1);
         width = Math.round(width * scale);
         height = Math.round(height * scale);
@@ -286,21 +290,16 @@ uploadForm.addEventListener("submit", async (e) => {
   }
 
   const file = fileInput.files[0];
-  if (file.size > 20 * 1024 * 1024) {
-    uploadMessage.textContent = "La fotografía es demasiado grande. Selecciona una imagen más ligera.";
-    uploadMessage.classList.add("error");
-    return;
-  }
 
   uploadMessage.textContent = "Procesando fotografía...";
   uploadMessage.className = "message";
 
   try {
-    // Redimensionar y comprimir antes de guardar
-    const dataUrl = await resizeImage(file, 1024, 1024, 0.7);
+    // Redimensionar y comprimir antes de guardar (máx. 1920 px lado mayor)
+    const dataUrl = await resizeImage(file, 1920, 1920, 0.7);
 
     // Comprobamos tamaño aproximado del dataUrl (en caracteres)
-    if (dataUrl.length > 900000) {
+    if (dataUrl.length > 950000) {
       uploadMessage.textContent =
         "La fotografía sigue siendo demasiado pesada incluso tras comprimirla. Prueba con una imagen más pequeña.";
       uploadMessage.classList.add("error");
@@ -499,7 +498,7 @@ document.getElementById("skip-photo-button").addEventListener("click", () => {
   loadNextPhotoForExpert();
 });
 
-// ----- PANEL ADMIN / RESUMEN + EXPORTAR CSV -----
+// ----- PANEL ADMIN / RESUMEN + EXPORTAR CSV + VISUALIZACIÓN -----
 async function updateAdminSummary() {
   try {
     const photosSnap = await getDocs(photosCol);
@@ -522,9 +521,173 @@ async function updateAdminSummary() {
     const li3 = document.createElement("li");
     li3.textContent = `Número de expertos/as activos: ${expertIds.length}`;
     summaryList.appendChild(li3);
+
+    // Gráfico simple de distribución por edad
+    renderAgeChart(photosSnap);
   } catch (err) {
     console.error(err);
   }
+}
+
+function renderAgeChart(photosSnap) {
+  if (!ageChart) return;
+
+  const ageCounts = {};
+  photosSnap.docs.forEach(doc => {
+    const p = doc.data();
+    if (typeof p.age === "number") {
+      ageCounts[p.age] = (ageCounts[p.age] || 0) + 1;
+    }
+  });
+
+  ageChart.innerHTML = "";
+  if (ageChartNote) ageChartNote.textContent = "";
+
+  const ages = Object.keys(ageCounts).map(a => Number(a)).sort((a, b) => a - b);
+  if (ages.length === 0) {
+    if (ageChartNote) {
+      ageChartNote.textContent = "Todavía no hay datos suficientes para mostrar la distribución por edad.";
+    }
+    return;
+  }
+
+  const maxCount = Math.max(...ages.map(a => ageCounts[a]));
+  ages.forEach(age => {
+    const row = document.createElement("div");
+    row.className = "chart-row";
+
+    const label = document.createElement("span");
+    label.className = "chart-label";
+    label.textContent = `${age} años`;
+
+    const outer = document.createElement("div");
+    outer.className = "chart-bar-outer";
+
+    const inner = document.createElement("div");
+    inner.className = "chart-bar-inner";
+    const widthPercent = (ageCounts[age] / maxCount) * 100;
+    inner.style.width = `${widthPercent}%`;
+
+    outer.appendChild(inner);
+    row.appendChild(label);
+    row.appendChild(outer);
+    ageChart.appendChild(row);
+  });
+
+  if (ageChartNote) {
+    ageChartNote.textContent = "Cada barra representa el número relativo de fotografías por edad.";
+  }
+}
+
+// Listado de todas las fotografías y valoraciones
+async function loadAllPhotosWithRatings() {
+  if (!photosList) return;
+  photosList.textContent = "Cargando fotografías y valoraciones...";
+
+  try {
+    const [photosSnap, ratingsSnap] = await Promise.all([
+      getDocs(photosCol),
+      getDocs(ratingsCol)
+    ]);
+
+    if (photosSnap.empty) {
+      photosList.textContent = "No hay fotografías almacenadas.";
+      return;
+    }
+
+    const ratingsByPhoto = {};
+    ratingsSnap.docs.forEach(docSnap => {
+      const r = docSnap.data();
+      const photoId = r.photoId;
+      if (!photoId) return;
+      if (!ratingsByPhoto[photoId]) ratingsByPhoto[photoId] = [];
+      ratingsByPhoto[photoId].push({
+        id: docSnap.id,
+        ...r
+      });
+    });
+
+    photosList.innerHTML = "";
+    photosSnap.docs.forEach(docSnap => {
+      const p = docSnap.data();
+      const photoId = docSnap.id;
+
+      const card = document.createElement("div");
+      card.className = "photo-card";
+
+      const img = document.createElement("img");
+      img.src = p.dataUrl;
+      img.alt = "Fotografía " + photoId;
+
+      const meta = document.createElement("p");
+      meta.innerHTML = `
+        <strong>ID:</strong> ${photoId}<br>
+        Edad: ${p.age ?? ""} | Sexo: ${p.gender || ""}<br>
+        Estudios: ${p.studies || ""} | Bachillerato: ${p.bachType || ""}<br>
+        Vocación: ${p.vocation || ""}<br>
+        Estudios padre: ${p.studiesFather || ""} | madre: ${p.studiesMother || ""}<br>
+        Centro: ${p.center || ""}
+      `;
+
+      card.appendChild(img);
+      card.appendChild(meta);
+
+      const rList = ratingsByPhoto[photoId] || [];
+      const ratingsInfo = document.createElement("div");
+      ratingsInfo.className = "photo-ratings";
+
+      if (rList.length === 0) {
+        ratingsInfo.textContent = "Sin valoraciones aún.";
+      } else {
+        const avg = rList.reduce((sum, r) => sum + (typeof r.puntf === "number" ? r.puntf : 0), 0) / rList.length;
+        const resumen = document.createElement("p");
+        resumen.textContent = `Valoraciones: ${rList.length} | PUNTF media: ${avg.toFixed(2)}`;
+        ratingsInfo.appendChild(resumen);
+
+        const table = document.createElement("table");
+        const thead = document.createElement("thead");
+        thead.innerHTML = `
+          <tr>
+            <th>Experto/a</th>
+            <th>Sub1</th>
+            <th>Sub2</th>
+            <th>Sub3</th>
+            <th>Sub4</th>
+            <th>Sub5</th>
+            <th>PUNTF</th>
+          </tr>
+        `;
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        rList.forEach(r => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${r.expertId || ""}</td>
+            <td>${r.sub1 ?? ""}</td>
+            <td>${r.sub2 ?? ""}</td>
+            <td>${r.sub3 ?? ""}</td>
+            <td>${r.sub4 ?? ""}</td>
+            <td>${r.sub5 ?? ""}</td>
+            <td>${typeof r.puntf === "number" ? r.puntf.toFixed(2) : ""}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        ratingsInfo.appendChild(table);
+      }
+
+      card.appendChild(ratingsInfo);
+      photosList.appendChild(card);
+    });
+  } catch (err) {
+    console.error(err);
+    photosList.textContent = "Error cargando fotografías y valoraciones.";
+  }
+}
+
+if (loadPhotosButton) {
+  loadPhotosButton.addEventListener("click", loadAllPhotosWithRatings);
 }
 
 document.getElementById("export-csv-button").addEventListener("click", async () => {
@@ -538,8 +701,8 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
     }
 
     const photos = {};
-    photosSnap.docs.forEach(doc => {
-      photos[doc.id] = doc.data();
+    photosSnap.docs.forEach(docSnap => {
+      photos[docSnap.id] = docSnap.data();
     });
 
     const header = [
@@ -598,8 +761,8 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
         ]);
       });
     } else {
-      ratingsSnap.docs.forEach(doc => {
-        const r = doc.data();
+      ratingsSnap.docs.forEach(docSnap => {
+        const r = docSnap.data();
         const p = photos[r.photoId];
         if (!p) return;
 

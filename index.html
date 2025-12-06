@@ -47,7 +47,7 @@
 
       <form id="upload-form">
         <div class="form-group">
-          <label for="photo-file">Fotografía (JPG, máximo 5 MB):</label>
+          <label for="photo-file">Fotografía (JPG):</label>
           <input type="file" id="photo-file" accept="image/jpeg,image/jpg" required>
         </div>
 
@@ -272,6 +272,19 @@
 
       <h3>Resumen rápido</h3>
       <ul id="admin-summary-list"></ul>
+
+      <h3>Visualización de datos</h3>
+      <div id="admin-charts">
+        <div class="chart-block">
+          <h4>Distribución de fotografías por edad</h4>
+          <div id="age-chart" class="chart-bar-container"></div>
+          <p class="note" id="age-chart-note"></p>
+        </div>
+      </div>
+
+      <h3>Listado de fotografías y valoraciones</h3>
+      <button id="load-photos-button">Cargar fotografías y valoraciones</button>
+      <div id="photos-list" class="photos-list"></div>
     </section>
   </main>
 
