@@ -59,12 +59,19 @@ label {
 input[type="text"],
 input[type="number"],
 input[type="password"],
-select {
+select,
+textarea {
   width: 100%;
   padding: 0.5rem;
   border-radius: 6px;
   border: 1px solid #c5cae9;
   margin-bottom: 0.75rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+
+textarea {
+  resize: vertical;
 }
 
 input[type="file"] {
@@ -102,7 +109,7 @@ button.secondary:hover {
 .note {
   font-size: 0.85rem;
   color: #555;
-  margin-top: 0.75rem;
+  margin-top: 0.25rem;
 }
 
 .consent-box {

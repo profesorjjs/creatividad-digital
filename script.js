@@ -35,7 +35,8 @@ const configDocRef = doc(db, "config", "general");
 
 // Configuración global simple
 let globalConfig = {
-  askCenter: false
+  askCenter: false,
+  centers: []
 };
 
 // ----- CLAVES DE ACCESO -----
@@ -53,7 +54,11 @@ const adminSection = document.getElementById("admin-section");
 
 // Elementos de configuración visual
 const centerWrapper = document.getElementById("center-wrapper");
+const centerSelect = document.getElementById("center");
+const centerNote = document.getElementById("center-note");
 const askCenterToggle = document.getElementById("ask-center-toggle");
+const centersTextarea = document.getElementById("centers-textarea");
+const saveCentersButton = document.getElementById("save-centers-button");
 const studiesSelect = document.getElementById("studies");
 const bachWrapper = document.getElementById("bach-wrapper");
 const ageChart = document.getElementById("age-chart");
@@ -65,15 +70,11 @@ const photosList = document.getElementById("photos-list");
 const backButtons = document.querySelectorAll(".back-button");
 backButtons.forEach(btn => {
   btn.addEventListener("click", () => {
-    // Ocultar secciones de roles
     uploadSection.classList.add("hidden");
     expertSection.classList.add("hidden");
     adminSection.classList.add("hidden");
-
-    // Mostrar de nuevo la pantalla de login
     loginSection.classList.remove("hidden");
 
-    // Resetear selector y contraseña
     const roleSelect = document.getElementById("role-select");
     const accessPassword = document.getElementById("access-password");
     if (roleSelect) roleSelect.value = "";
@@ -81,19 +82,55 @@ backButtons.forEach(btn => {
   });
 });
 
-// Funciones de configuración global
-function applyConfigToUpload() {
-  if (!centerWrapper) return;
-  if (globalConfig.askCenter) {
-    centerWrapper.style.display = "block";
+// ---- APLICAR CONFIGURACIÓN ----
+function applyCentersToSelect() {
+  if (!centerSelect) return;
+
+  centerSelect.innerHTML = "";
+
+  const defaultOption = document.createElement("option");
+  if (globalConfig.centers && globalConfig.centers.length > 0) {
+    defaultOption.value = "";
+    defaultOption.textContent = "Selecciona tu centro";
   } else {
-    centerWrapper.style.display = "none";
+    defaultOption.value = "";
+    defaultOption.textContent = "No hay centros configurados";
+  }
+  centerSelect.appendChild(defaultOption);
+
+  if (Array.isArray(globalConfig.centers)) {
+    globalConfig.centers.forEach(name => {
+      const trimmed = (name || "").trim();
+      if (!trimmed) return;
+      const opt = document.createElement("option");
+      opt.value = trimmed;
+      opt.textContent = trimmed;
+      centerSelect.appendChild(opt);
+    });
+  }
+
+  if (centerNote) {
+    if (!globalConfig.centers || globalConfig.centers.length === 0) {
+      centerNote.textContent = "Pregunta a tu profesor/a si no aparece tu centro.";
+    } else {
+      centerNote.textContent = "";
+    }
   }
 }
 
+function applyConfigToUpload() {
+  if (!centerWrapper) return;
+  applyCentersToSelect();
+  centerWrapper.style.display = globalConfig.askCenter ? "block" : "none";
+}
+
 function applyConfigToAdmin() {
-  if (!askCenterToggle) return;
-  askCenterToggle.checked = !!globalConfig.askCenter;
+  if (askCenterToggle) {
+    askCenterToggle.checked = !!globalConfig.askCenter;
+  }
+  if (centersTextarea) {
+    centersTextarea.value = (globalConfig.centers || []).join("\n");
+  }
 }
 
 async function loadGlobalConfig() {
@@ -102,12 +139,15 @@ async function loadGlobalConfig() {
     if (snap.exists()) {
       const data = snap.data();
       globalConfig.askCenter = !!data.askCenter;
+      globalConfig.centers = Array.isArray(data.centers) ? data.centers : [];
     } else {
       globalConfig.askCenter = false;
+      globalConfig.centers = [];
     }
   } catch (err) {
     console.error("Error cargando configuración global:", err);
     globalConfig.askCenter = false;
+    globalConfig.centers = [];
   }
   applyConfigToUpload();
   applyConfigToAdmin();
@@ -135,12 +175,15 @@ if (askCenterToggle) {
     const newValue = askCenterToggle.checked;
     globalConfig.askCenter = newValue;
     applyConfigToUpload();
+
     try {
       const snap = await getDoc(configDocRef);
-      if (snap.exists()) {
-        await updateDoc(configDocRef, { askCenter: newValue });
+      const payload = { askCenter: newValue };
+      if (!snap.exists()) {
+        payload.centers = globalConfig.centers || [];
+        await setDoc(configDocRef, payload);
       } else {
-        await setDoc(configDocRef, { askCenter: newValue });
+        await updateDoc(configDocRef, payload);
       }
     } catch (err) {
       console.error("Error actualizando configuración:", err);
@@ -149,8 +192,38 @@ if (askCenterToggle) {
   });
 }
 
-// Función para redimensionar y comprimir la imagen antes de subirla
-// -> máximo 1920 px en el lado más ancho.
+// Guardar lista de centros desde el panel admin
+if (saveCentersButton) {
+  saveCentersButton.addEventListener("click", async () => {
+    if (!centersTextarea) return;
+    const rawLines = centersTextarea.value.split("\n");
+    const centersList = rawLines
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+
+    globalConfig.centers = centersList;
+    applyConfigToUpload();
+
+    try {
+      const snap = await getDoc(configDocRef);
+      const payload = {
+        centers: centersList
+      };
+      if (!snap.exists()) {
+        payload.askCenter = globalConfig.askCenter;
+        await setDoc(configDocRef, payload);
+      } else {
+        await updateDoc(configDocRef, payload);
+      }
+      alert("Lista de centros actualizada.");
+    } catch (err) {
+      console.error("Error guardando centros:", err);
+      alert("No se ha podido guardar la lista de centros.");
+    }
+  });
+}
+
+// Función para redimensionar y comprimir la imagen antes de subirla (máx. 1920 px lado mayor)
 function resizeImage(file, maxWidth = 1920, maxHeight = 1920, quality = 0.7) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -244,7 +317,6 @@ uploadForm.addEventListener("submit", async (e) => {
   uploadMessage.textContent = "";
   uploadMessage.className = "message";
 
-  // Validación HTML5 estándar (required, min, etc.)
   if (!uploadForm.reportValidity()) {
     return;
   }
@@ -264,19 +336,16 @@ uploadForm.addEventListener("submit", async (e) => {
   const pcRoom = document.querySelector('input[name="pc-room"]:checked')?.value || "";
   const pcFrequency = document.getElementById("pc-frequency").value;
   const pcHours = Number(document.getElementById("pc-hours").value);
-  const centerInput = document.getElementById("center");
-  const center = centerInput ? centerInput.value.trim() : "";
+  const center = centerSelect ? centerSelect.value.trim() : "";
 
   const privacyOk = document.getElementById("privacy-ok");
 
-  // Validación extra de edad
   if (!Number.isFinite(ageValue) || ageValue < 10 || ageValue > 100) {
     uploadMessage.textContent = "Introduce una edad válida entre 10 y 100 años.";
     uploadMessage.classList.add("error");
     return;
   }
 
-  // Validación política de privacidad
   if (!privacyOk || !privacyOk.checked) {
     uploadMessage.textContent = "Debes aceptar la política de privacidad.";
     uploadMessage.classList.add("error");
@@ -295,10 +364,8 @@ uploadForm.addEventListener("submit", async (e) => {
   uploadMessage.className = "message";
 
   try {
-    // Redimensionar y comprimir antes de guardar (máx. 1920 px lado mayor)
     const dataUrl = await resizeImage(file, 1920, 1920, 0.7);
 
-    // Comprobamos tamaño aproximado del dataUrl (en caracteres)
     if (dataUrl.length > 950000) {
       uploadMessage.textContent =
         "La fotografía sigue siendo demasiado pesada incluso tras comprimirla. Prueba con una imagen más pequeña.";
@@ -341,6 +408,7 @@ uploadForm.addEventListener("submit", async (e) => {
 
     uploadForm.reset();
     if (bachWrapper) bachWrapper.style.display = "none";
+    applyConfigToUpload(); // Para reconstruir el select de centros tras reset
   } catch (err) {
     console.error("Error al procesar o guardar la fotografía:", err);
     uploadMessage.textContent =
@@ -522,7 +590,6 @@ async function updateAdminSummary() {
     li3.textContent = `Número de expertos/as activos: ${expertIds.length}`;
     summaryList.appendChild(li3);
 
-    // Gráfico simple de distribución por edad
     renderAgeChart(photosSnap);
   } catch (err) {
     console.error(err);
@@ -533,8 +600,8 @@ function renderAgeChart(photosSnap) {
   if (!ageChart) return;
 
   const ageCounts = {};
-  photosSnap.docs.forEach(doc => {
-    const p = doc.data();
+  photosSnap.docs.forEach(docSnap => {
+    const p = docSnap.data();
     if (typeof p.age === "number") {
       ageCounts[p.age] = (ageCounts[p.age] || 0) + 1;
     }
