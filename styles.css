@@ -102,6 +102,14 @@ button.secondary:hover {
   background: #d5d5d5;
 }
 
+.danger-button {
+  background: #c62828;
+}
+
+.danger-button:hover {
+  background: #b71c1c;
+}
+
 .form-group {
   margin-bottom: 1rem;
 }

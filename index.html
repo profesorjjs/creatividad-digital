@@ -209,39 +209,10 @@
           <img id="rating-photo" alt="Fotografía a valorar">
           <p id="rating-photo-info"></p>
 
-          <h4>Subescalas de creatividad digital (1 = muy bajo, 10 = muy alto)</h4>
+          <h4>Ítems de valoración (1 = muy bajo, 10 = muy alto)</h4>
+          <div id="rating-items-container"></div>
 
-          <div class="rating-item">
-            <label for="sub1">1. Originalidad y novedad:</label>
-            <input type="range" id="sub1" min="1" max="10" value="5">
-            <span id="sub1-value">5</span>
-          </div>
-
-          <div class="rating-item">
-            <label for="sub2">2. Expresión creativa y emocional:</label>
-            <input type="range" id="sub2" min="1" max="10" value="5">
-            <span id="sub2-value">5</span>
-          </div>
-
-          <div class="rating-item">
-            <label for="sub3">3. Uso innovador de técnicas digitales:</label>
-            <input type="range" id="sub3" min="1" max="10" value="5">
-            <span id="sub3-value">5</span>
-          </div>
-
-          <div class="rating-item">
-            <label for="sub4">4. Composición visual y técnica:</label>
-            <input type="range" id="sub4" min="1" max="10" value="5">
-            <span id="sub4-value">5</span>
-          </div>
-
-          <div class="rating-item">
-            <label for="sub5">5. Interacción y cocreación:</label>
-            <input type="range" id="sub5" min="1" max="10" value="5">
-            <span id="sub5-value">5</span>
-          </div>
-
-          <p class="puntf">PUNTF (media de subescalas): <span id="puntf-value">5.0</span></p>
+          <p class="puntf">PUNTF (media de ítems): <span id="puntf-value">0.0</span></p>
 
           <div class="rating-buttons">
             <button id="save-rating-button">Guardar valoración y siguiente</button>
@@ -262,7 +233,7 @@
       <p>Desde aquí puedes exportar los datos de fotografías y valoraciones en formato CSV para analizarlos estadísticamente.</p>
 
       <button id="export-csv-button">Descargar CSV</button>
-      <p class="note">El archivo incluirá una fila por combinación fotografía × experto/a, con las 5 subvaloraciones y la PUNTF.</p>
+      <p class="note">El archivo incluirá una fila por combinación fotografía × experto/a, con las valoraciones y la PUNTF.</p>
 
       <h3>Opciones de recogida de datos</h3>
       <div class="form-group">
@@ -278,6 +249,25 @@
         <textarea id="centers-textarea" rows="4" placeholder="IES Ejemplo 1&#10;IES Ejemplo 2"></textarea>
         <button type="button" id="save-centers-button">Guardar lista de centros</button>
         <p class="note">Estos centros aparecerán en el desplegable del alumnado cuando la opción esté activada.</p>
+      </div>
+
+      <h3>Ítems de valoración de fotografías</h3>
+      <div class="form-group">
+        <label for="rating-items-textarea">Ítems (uno por línea):</label>
+        <textarea id="rating-items-textarea" rows="5"
+          placeholder="Originalidad y novedad&#10;Expresión creativa y emocional&#10;Uso innovador de técnicas digitales"></textarea>
+        <button type="button" id="save-rating-items-button">Guardar ítems de valoración</button>
+        <p class="note">Estos ítems se utilizarán en la interfaz de valoración de las fotografías.</p>
+      </div>
+
+      <h3>Gestión del experimento</h3>
+      <div class="form-group">
+        <button type="button" id="reset-db-button" class="danger-button">
+          Reinicializar base de datos (borrar todas las fotografías y valoraciones)
+        </button>
+        <p class="note">
+          Úsalo solo cuando quieras comenzar un experimento desde cero. No afecta a la configuración (centros, ítems, etc.).
+        </p>
       </div>
 
       <h3>Resumen rápido</h3>

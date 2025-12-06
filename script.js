@@ -12,7 +12,8 @@ import {
   doc,
   getDoc,
   setDoc,
-  updateDoc
+  updateDoc,
+  deleteDoc
 } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
 // ----- CONFIGURACIÓN DE TU PROYECTO FIREBASE -----
@@ -33,10 +34,20 @@ const photosCol = collection(db, "photos");
 const ratingsCol = collection(db, "ratings");
 const configDocRef = doc(db, "config", "general");
 
+// Ítems de valoración por defecto
+const DEFAULT_RATING_ITEMS = [
+  { id: "item1", label: "Originalidad y novedad" },
+  { id: "item2", label: "Expresión creativa y emocional" },
+  { id: "item3", label: "Uso innovador de técnicas digitales" },
+  { id: "item4", label: "Composición visual y técnica" },
+  { id: "item5", label: "Interacción y cocreación" }
+];
+
 // Configuración global simple
 let globalConfig = {
   askCenter: false,
-  centers: []
+  centers: [],
+  ratingItems: DEFAULT_RATING_ITEMS
 };
 
 // ----- CLAVES DE ACCESO -----
@@ -59,12 +70,20 @@ const centerNote = document.getElementById("center-note");
 const askCenterToggle = document.getElementById("ask-center-toggle");
 const centersTextarea = document.getElementById("centers-textarea");
 const saveCentersButton = document.getElementById("save-centers-button");
+const ratingItemsTextarea = document.getElementById("rating-items-textarea");
+const saveRatingItemsButton = document.getElementById("save-rating-items-button");
+const resetDbButton = document.getElementById("reset-db-button");
 const studiesSelect = document.getElementById("studies");
 const bachWrapper = document.getElementById("bach-wrapper");
 const ageChart = document.getElementById("age-chart");
 const ageChartNote = document.getElementById("age-chart-note");
 const loadPhotosButton = document.getElementById("load-photos-button");
 const photosList = document.getElementById("photos-list");
+
+// Rating dinámico
+const ratingItemsContainer = document.getElementById("rating-items-container");
+const puntfSpan = document.getElementById("puntf-value");
+let ratingControls = [];
 
 // Botones "Volver al inicio"
 const backButtons = document.querySelectorAll(".back-button");
@@ -131,6 +150,74 @@ function applyConfigToAdmin() {
   if (centersTextarea) {
     centersTextarea.value = (globalConfig.centers || []).join("\n");
   }
+  if (ratingItemsTextarea) {
+    ratingItemsTextarea.value = (globalConfig.ratingItems || []).map(i => i.label).join("\n");
+  }
+}
+
+function buildRatingControls() {
+  if (!ratingItemsContainer) return;
+
+  ratingItemsContainer.innerHTML = "";
+  ratingControls = [];
+
+  const items = globalConfig.ratingItems && globalConfig.ratingItems.length
+    ? globalConfig.ratingItems
+    : DEFAULT_RATING_ITEMS;
+
+  items.forEach((item, index) => {
+    const wrapper = document.createElement("div");
+    wrapper.className = "rating-item";
+
+    const labelEl = document.createElement("label");
+    const inputId = `rating-item-${item.id}`;
+    labelEl.setAttribute("for", inputId);
+    labelEl.textContent = `${index + 1}. ${item.label}`;
+
+    const input = document.createElement("input");
+    input.type = "range";
+    input.min = "1";
+    input.max = "10";
+    input.value = "5";
+    input.id = inputId;
+
+    const valueSpan = document.createElement("span");
+    valueSpan.textContent = "5";
+
+    wrapper.appendChild(labelEl);
+    wrapper.appendChild(input);
+    wrapper.appendChild(valueSpan);
+
+    input.addEventListener("input", () => {
+      valueSpan.textContent = input.value;
+      updatePuntf();
+    });
+
+    ratingItemsContainer.appendChild(wrapper);
+
+    ratingControls.push({
+      config: item,
+      input,
+      valueSpan
+    });
+  });
+
+  updatePuntf();
+}
+
+function updatePuntf() {
+  if (!ratingControls.length) {
+    if (puntfSpan) puntfSpan.textContent = "0.0";
+    return;
+  }
+  const sum = ratingControls.reduce(
+    (acc, rc) => acc + Number(rc.input.value || 0),
+    0
+  );
+  const avg = sum / ratingControls.length;
+  if (puntfSpan) {
+    puntfSpan.textContent = avg.toFixed(1);
+  }
 }
 
 async function loadGlobalConfig() {
@@ -140,17 +227,29 @@ async function loadGlobalConfig() {
       const data = snap.data();
       globalConfig.askCenter = !!data.askCenter;
       globalConfig.centers = Array.isArray(data.centers) ? data.centers : [];
+      if (Array.isArray(data.ratingItems) && data.ratingItems.length > 0) {
+        globalConfig.ratingItems = data.ratingItems.map((it, idx) => ({
+          id: it.id || `item${idx + 1}`,
+          label: it.label || `Ítem ${idx + 1}`
+        }));
+      } else {
+        globalConfig.ratingItems = DEFAULT_RATING_ITEMS;
+      }
     } else {
       globalConfig.askCenter = false;
       globalConfig.centers = [];
+      globalConfig.ratingItems = DEFAULT_RATING_ITEMS;
     }
   } catch (err) {
     console.error("Error cargando configuración global:", err);
     globalConfig.askCenter = false;
     globalConfig.centers = [];
+    globalConfig.ratingItems = DEFAULT_RATING_ITEMS;
   }
+
   applyConfigToUpload();
   applyConfigToAdmin();
+  buildRatingControls();
 }
 
 // Cargar configuración al inicio
@@ -181,6 +280,7 @@ if (askCenterToggle) {
       const payload = { askCenter: newValue };
       if (!snap.exists()) {
         payload.centers = globalConfig.centers || [];
+        payload.ratingItems = globalConfig.ratingItems || DEFAULT_RATING_ITEMS;
         await setDoc(configDocRef, payload);
       } else {
         await updateDoc(configDocRef, payload);
@@ -206,11 +306,10 @@ if (saveCentersButton) {
 
     try {
       const snap = await getDoc(configDocRef);
-      const payload = {
-        centers: centersList
-      };
+      const payload = { centers: centersList };
       if (!snap.exists()) {
         payload.askCenter = globalConfig.askCenter;
+        payload.ratingItems = globalConfig.ratingItems || DEFAULT_RATING_ITEMS;
         await setDoc(configDocRef, payload);
       } else {
         await updateDoc(configDocRef, payload);
@@ -219,6 +318,77 @@ if (saveCentersButton) {
     } catch (err) {
       console.error("Error guardando centros:", err);
       alert("No se ha podido guardar la lista de centros.");
+    }
+  });
+}
+
+// Guardar ítems de valoración desde el panel admin
+if (saveRatingItemsButton) {
+  saveRatingItemsButton.addEventListener("click", async () => {
+    if (!ratingItemsTextarea) return;
+    const rawLines = ratingItemsTextarea.value.split("\n");
+    const labels = rawLines
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+
+    if (!labels.length) {
+      alert("Debes introducir al menos un ítem de valoración.");
+      return;
+    }
+
+    const ratingItems = labels.map((label, idx) => ({
+      id: `item${idx + 1}`,
+      label
+    }));
+
+    globalConfig.ratingItems = ratingItems;
+    buildRatingControls();
+
+    try {
+      const snap = await getDoc(configDocRef);
+      const payload = { ratingItems };
+      if (!snap.exists()) {
+        payload.askCenter = globalConfig.askCenter;
+        payload.centers = globalConfig.centers || [];
+        await setDoc(configDocRef, payload);
+      } else {
+        await updateDoc(configDocRef, payload);
+      }
+      alert("Ítems de valoración actualizados.");
+    } catch (err) {
+      console.error("Error guardando ítems de valoración:", err);
+      alert("No se ha podido guardar los ítems de valoración.");
+    }
+  });
+}
+
+// Reinicializar base de datos (borrar todas las fotos y valoraciones)
+if (resetDbButton) {
+  resetDbButton.addEventListener("click", async () => {
+    const ok = confirm(
+      "Esta acción borrará TODAS las fotografías y valoraciones de la base de datos. " +
+      "La configuración (centros, ítems, etc.) se mantendrá. ¿Seguro que quieres continuar?"
+    );
+    if (!ok) return;
+
+    try {
+      const [photosSnap, ratingsSnap] = await Promise.all([
+        getDocs(photosCol),
+        getDocs(ratingsCol)
+      ]);
+
+      const ops = [];
+      photosSnap.forEach(docSnap => ops.push(deleteDoc(docSnap.ref)));
+      ratingsSnap.forEach(docSnap => ops.push(deleteDoc(docSnap.ref)));
+
+      await Promise.all(ops);
+
+      alert("Base de datos reinicializada. Se han borrado todas las fotografías y valoraciones.");
+      if (photosList) photosList.innerHTML = "";
+      updateAdminSummary();
+    } catch (err) {
+      console.error("Error al reinicializar la base de datos:", err);
+      alert("Ha ocurrido un error al reinicializar la base de datos.");
     }
   });
 }
@@ -408,7 +578,7 @@ uploadForm.addEventListener("submit", async (e) => {
 
     uploadForm.reset();
     if (bachWrapper) bachWrapper.style.display = "none";
-    applyConfigToUpload(); // Para reconstruir el select de centros tras reset
+    applyConfigToUpload(); // reconstruir select de centros tras reset
   } catch (err) {
     console.error("Error al procesar o guardar la fotografía:", err);
     uploadMessage.textContent =
@@ -418,19 +588,6 @@ uploadForm.addEventListener("submit", async (e) => {
 });
 
 // ----- VALORACIÓN POR EXPERTOS -----
-const sub1 = document.getElementById("sub1");
-const sub2 = document.getElementById("sub2");
-const sub3 = document.getElementById("sub3");
-const sub4 = document.getElementById("sub4");
-const sub5 = document.getElementById("sub5");
-
-const sub1Value = document.getElementById("sub1-value");
-const sub2Value = document.getElementById("sub2-value");
-const sub3Value = document.getElementById("sub3-value");
-const sub4Value = document.getElementById("sub4-value");
-const sub5Value = document.getElementById("sub5-value");
-const puntfSpan = document.getElementById("puntf-value");
-
 const ratingArea = document.getElementById("rating-area");
 const noPhotosMessage = document.getElementById("no-photos-message");
 const photoRatingCard = document.getElementById("photo-rating-card");
@@ -439,20 +596,6 @@ const ratingPhotoInfo = document.getElementById("rating-photo-info");
 const ratingMessage = document.getElementById("rating-message");
 
 let currentPhotoForExpert = null;
-
-function updatePuntf() {
-  const values = [sub1, sub2, sub3, sub4, sub5].map(i => Number(i.value));
-  const avg = values.reduce((a, b) => a + b, 0) / values.length;
-  puntfSpan.textContent = avg.toFixed(1);
-}
-
-[sub1, sub2, sub3, sub4, sub5].forEach((input, index) => {
-  const spans = [sub1Value, sub2Value, sub3Value, sub4Value, sub5Value];
-  input.addEventListener("input", () => {
-    spans[index].textContent = input.value;
-    updatePuntf();
-  });
-});
 
 document.getElementById("start-rating-button").addEventListener("click", () => {
   const expertId = document.getElementById("expert-id").value.trim();
@@ -471,9 +614,9 @@ async function loadNextPhotoForExpert() {
 
   try {
     const photosSnap = await getDocs(photosCol);
-    const photos = photosSnap.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
+    const photos = photosSnap.docs.map(docSnap => ({
+      id: docSnap.id,
+      ...docSnap.data()
     }));
 
     const ratingsSnap = await getDocs(
@@ -506,9 +649,9 @@ async function loadNextPhotoForExpert() {
       `ID: ${photo.id} | Edad: ${photo.age} | Sexo: ${photo.gender} | ` +
       `Estudios: ${photo.studies} | Bachillerato: ${photo.bachType || "N/A"}`;
 
-    [sub1, sub2, sub3, sub4, sub5].forEach(slider => { slider.value = 5; });
-    [sub1Value, sub2Value, sub3Value, sub4Value, sub5Value].forEach(span => {
-      span.textContent = "5";
+    ratingControls.forEach(rc => {
+      rc.input.value = 5;
+      rc.valueSpan.textContent = "5";
     });
     updatePuntf();
     ratingMessage.textContent = "";
@@ -530,22 +673,25 @@ document.getElementById("save-rating-button").addEventListener("click", async ()
     return;
   }
 
-  const v1 = Number(sub1.value);
-  const v2 = Number(sub2.value);
-  const v3 = Number(sub3.value);
-  const v4 = Number(sub4.value);
-  const v5 = Number(sub5.value);
-  const puntf = (v1 + v2 + v3 + v4 + v5) / 5;
+  if (!ratingControls.length) {
+    alert("No hay ítems de valoración configurados.");
+    return;
+  }
+
+  const ratingsMap = {};
+  let sum = 0;
+  ratingControls.forEach(rc => {
+    const v = Number(rc.input.value);
+    sum += v;
+    ratingsMap[rc.config.id] = v;
+  });
+  const puntf = sum / ratingControls.length;
 
   try {
     await addDoc(ratingsCol, {
       photoId: currentPhotoForExpert.id,
       expertId,
-      sub1: v1,
-      sub2: v2,
-      sub3: v3,
-      sub4: v4,
-      sub5: v5,
+      ratings: ratingsMap,
       puntf,
       createdAt: new Date().toISOString()
     });
@@ -674,6 +820,10 @@ async function loadAllPhotosWithRatings() {
       });
     });
 
+    const items = globalConfig.ratingItems && globalConfig.ratingItems.length
+      ? globalConfig.ratingItems
+      : DEFAULT_RATING_ITEMS;
+
     photosList.innerHTML = "";
     photosSnap.docs.forEach(docSnap => {
       const p = docSnap.data();
@@ -706,40 +856,46 @@ async function loadAllPhotosWithRatings() {
       if (rList.length === 0) {
         ratingsInfo.textContent = "Sin valoraciones aún.";
       } else {
-        const avg = rList.reduce((sum, r) => sum + (typeof r.puntf === "number" ? r.puntf : 0), 0) / rList.length;
+        const avg = rList.reduce(
+          (sum, r) => sum + (typeof r.puntf === "number" ? r.puntf : 0),
+          0
+        ) / rList.length;
+
         const resumen = document.createElement("p");
         resumen.textContent = `Valoraciones: ${rList.length} | PUNTF media: ${avg.toFixed(2)}`;
         ratingsInfo.appendChild(resumen);
 
         const table = document.createElement("table");
         const thead = document.createElement("thead");
-        thead.innerHTML = `
-          <tr>
-            <th>Experto/a</th>
-            <th>Sub1</th>
-            <th>Sub2</th>
-            <th>Sub3</th>
-            <th>Sub4</th>
-            <th>Sub5</th>
-            <th>PUNTF</th>
-          </tr>
-        `;
+
+        let headerHtml = "<tr><th>Experto/a</th>";
+        items.forEach(item => {
+          headerHtml += `<th>${item.label}</th>`;
+        });
+        headerHtml += "<th>PUNTF</th></tr>";
+        thead.innerHTML = headerHtml;
         table.appendChild(thead);
 
         const tbody = document.createElement("tbody");
         rList.forEach(r => {
           const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td>${r.expertId || ""}</td>
-            <td>${r.sub1 ?? ""}</td>
-            <td>${r.sub2 ?? ""}</td>
-            <td>${r.sub3 ?? ""}</td>
-            <td>${r.sub4 ?? ""}</td>
-            <td>${r.sub5 ?? ""}</td>
-            <td>${typeof r.puntf === "number" ? r.puntf.toFixed(2) : ""}</td>
-          `;
+
+          const ratingsMap = r.ratings || {};
+          let rowHtml = `<td>${r.expertId || ""}</td>`;
+          items.forEach((item, idx) => {
+            let val = ratingsMap[item.id];
+            // Compatibilidad con datos antiguos tipo sub1, sub2...
+            if (val === undefined && r[`sub${idx + 1}`] !== undefined) {
+              val = r[`sub${idx + 1}`];
+            }
+            rowHtml += `<td>${val ?? ""}</td>`;
+          });
+          rowHtml += `<td>${typeof r.puntf === "number" ? r.puntf.toFixed(2) : ""}</td>`;
+
+          tr.innerHTML = rowHtml;
           tbody.appendChild(tr);
         });
+
         table.appendChild(tbody);
         ratingsInfo.appendChild(table);
       }
@@ -757,6 +913,7 @@ if (loadPhotosButton) {
   loadPhotosButton.addEventListener("click", loadAllPhotosWithRatings);
 }
 
+// Exportar CSV dinámico con ítems configurables
 document.getElementById("export-csv-button").addEventListener("click", async () => {
   try {
     const photosSnap = await getDocs(photosCol);
@@ -771,6 +928,10 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
     photosSnap.docs.forEach(docSnap => {
       photos[docSnap.id] = docSnap.data();
     });
+
+    const items = globalConfig.ratingItems && globalConfig.ratingItems.length
+      ? globalConfig.ratingItems
+      : DEFAULT_RATING_ITEMS;
 
     const header = [
       "fotoId",
@@ -788,21 +949,22 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
       "frecuencia_uso_ordenador",
       "horas_diarias_ordenador",
       "centro_educativo",
-      "expertoId",
-      "sub1_originalidad",
-      "sub2_expresion",
-      "sub3_tecnicas_digitales",
-      "sub4_composicion",
-      "sub5_interaccion",
-      "puntf"
+      "expertoId"
     ];
+
+    // Añadimos columnas para cada ítem usando su etiqueta
+    items.forEach(item => {
+      header.push(item.label);
+    });
+
+    header.push("puntf");
 
     const rows = [];
     rows.push(header);
 
     if (ratingsSnap.empty) {
       Object.entries(photos).forEach(([id, p]) => {
-        rows.push([
+        const base = [
           id,
           p.gender || "",
           p.age ?? "",
@@ -818,14 +980,15 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
           p.pcFrequency || "",
           p.pcHours ?? "",
           p.center || "",
-          "",
-          "",
-          "",
-          "",
-          "",
-          "",
           ""
-        ]);
+        ];
+
+        items.forEach(() => {
+          base.push("");
+        });
+
+        base.push("");
+        rows.push(base);
       });
     } else {
       ratingsSnap.docs.forEach(docSnap => {
@@ -833,7 +996,7 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
         const p = photos[r.photoId];
         if (!p) return;
 
-        rows.push([
+        const base = [
           r.photoId,
           p.gender || "",
           p.age ?? "",
@@ -849,14 +1012,21 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
           p.pcFrequency || "",
           p.pcHours ?? "",
           p.center || "",
-          r.expertId || "",
-          r.sub1 ?? "",
-          r.sub2 ?? "",
-          r.sub3 ?? "",
-          r.sub4 ?? "",
-          r.sub5 ?? "",
-          (typeof r.puntf === "number" ? r.puntf.toFixed(2) : "")
-        ]);
+          r.expertId || ""
+        ];
+
+        const ratingsMap = r.ratings || {};
+        items.forEach((item, idx) => {
+          let val = ratingsMap[item.id];
+          // compatibilidad con sub1..sub5 antiguos
+          if (val === undefined && r[`sub${idx + 1}`] !== undefined) {
+            val = r[`sub${idx + 1}`];
+          }
+          base.push(val ?? "");
+        });
+
+        base.push(typeof r.puntf === "number" ? r.puntf.toFixed(2) : "");
+        rows.push(base);
       });
     }
 
