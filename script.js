@@ -1,4 +1,4 @@
-// script.js (versión con Firebase + Firestore + IA ligera)
+// script.js (versión con Firebase + Firestore + IA ligera + claves configurables)
 
 // ----- IMPORTS DE FIREBASE DESDE CDN -----
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
@@ -54,19 +54,20 @@ const DEFAULT_AI_CONFIG = {
   }
 };
 
+// Configuración por defecto de claves
+const DEFAULT_AUTH_CONFIG = {
+  uploaderPassword: "alumno2025",
+  expertPassword: "experto2025",
+  adminPassword: "admin2025"
+};
+
 // Configuración global simple
 let globalConfig = {
   askCenter: false,
   centers: [],
   ratingItems: DEFAULT_RATING_ITEMS,
-  aiConfig: DEFAULT_AI_CONFIG
-};
-
-// ----- CLAVES DE ACCESO -----
-const PASSWORDS = {
-  uploader: "alumno2025",
-  expert: "experto2025",
-  admin: "admin2025"
+  aiConfig: DEFAULT_AI_CONFIG,
+  authConfig: DEFAULT_AUTH_CONFIG
 };
 
 // ----- GESTIÓN DE SECCIONES -----
@@ -103,6 +104,12 @@ const aiColorfulnessWeight = document.getElementById("ai-colorfulness-weight");
 const aiEdgeDensityEnabled = document.getElementById("ai-edgedensity-enabled");
 const aiEdgeDensityWeight = document.getElementById("ai-edgedensity-weight");
 const saveAiConfigButton = document.getElementById("save-ai-config-button");
+
+// Gestión de claves desde Admin
+const uploaderPasswordInput = document.getElementById("uploader-password-input");
+const expertPasswordInput = document.getElementById("expert-password-input");
+const adminPasswordInput = document.getElementById("admin-password-input");
+const savePasswordsButton = document.getElementById("save-passwords-button");
 
 // Rating dinámico (expertos)
 const ratingItemsContainer = document.getElementById("rating-items-container");
@@ -207,6 +214,19 @@ function applyConfigToAdmin() {
   if (ratingItemsTextarea) {
     ratingItemsTextarea.value = (globalConfig.ratingItems || []).map(i => i.label).join("\n");
   }
+
+  // Claves de acceso
+  const auth = globalConfig.authConfig || DEFAULT_AUTH_CONFIG;
+  if (uploaderPasswordInput) {
+    uploaderPasswordInput.value = auth.uploaderPassword || "";
+  }
+  if (expertPasswordInput) {
+    expertPasswordInput.value = auth.expertPassword || "";
+  }
+  if (adminPasswordInput) {
+    adminPasswordInput.value = auth.adminPassword || "";
+  }
+
   applyAiConfigToAdmin();
 }
 
@@ -293,6 +313,23 @@ function mergeAiConfig(dataAi) {
   return base;
 }
 
+// Merge Auth config con defaults
+function mergeAuthConfig(dataAuth) {
+  const base = { ...DEFAULT_AUTH_CONFIG };
+  if (!dataAuth) return base;
+
+  if (typeof dataAuth.uploaderPassword === "string") {
+    base.uploaderPassword = dataAuth.uploaderPassword;
+  }
+  if (typeof dataAuth.expertPassword === "string") {
+    base.expertPassword = dataAuth.expertPassword;
+  }
+  if (typeof dataAuth.adminPassword === "string") {
+    base.adminPassword = dataAuth.adminPassword;
+  }
+  return base;
+}
+
 async function loadGlobalConfig() {
   try {
     const snap = await getDoc(configDocRef);
@@ -309,11 +346,13 @@ async function loadGlobalConfig() {
         globalConfig.ratingItems = DEFAULT_RATING_ITEMS;
       }
       globalConfig.aiConfig = mergeAiConfig(data.aiConfig);
+      globalConfig.authConfig = mergeAuthConfig(data.authConfig);
     } else {
       globalConfig.askCenter = false;
       globalConfig.centers = [];
       globalConfig.ratingItems = DEFAULT_RATING_ITEMS;
       globalConfig.aiConfig = DEFAULT_AI_CONFIG;
+      globalConfig.authConfig = DEFAULT_AUTH_CONFIG;
     }
   } catch (err) {
     console.error("Error cargando configuración global:", err);
@@ -321,6 +360,7 @@ async function loadGlobalConfig() {
     globalConfig.centers = [];
     globalConfig.ratingItems = DEFAULT_RATING_ITEMS;
     globalConfig.aiConfig = DEFAULT_AI_CONFIG;
+    globalConfig.authConfig = DEFAULT_AUTH_CONFIG;
   }
 
   applyConfigToUpload();
@@ -358,6 +398,7 @@ if (askCenterToggle) {
         payload.centers = globalConfig.centers || [];
         payload.ratingItems = globalConfig.ratingItems || DEFAULT_RATING_ITEMS;
         payload.aiConfig = globalConfig.aiConfig || DEFAULT_AI_CONFIG;
+        payload.authConfig = globalConfig.authConfig || DEFAULT_AUTH_CONFIG;
         await setDoc(configDocRef, payload);
       } else {
         await updateDoc(configDocRef, payload);
@@ -388,6 +429,7 @@ if (saveCentersButton) {
         payload.askCenter = globalConfig.askCenter;
         payload.ratingItems = globalConfig.ratingItems || DEFAULT_RATING_ITEMS;
         payload.aiConfig = globalConfig.aiConfig || DEFAULT_AI_CONFIG;
+        payload.authConfig = globalConfig.authConfig || DEFAULT_AUTH_CONFIG;
         await setDoc(configDocRef, payload);
       } else {
         await updateDoc(configDocRef, payload);
@@ -429,6 +471,7 @@ if (saveRatingItemsButton) {
         payload.askCenter = globalConfig.askCenter;
         payload.centers = globalConfig.centers || [];
         payload.aiConfig = globalConfig.aiConfig || DEFAULT_AI_CONFIG;
+        payload.authConfig = globalConfig.authConfig || DEFAULT_AUTH_CONFIG;
         await setDoc(configDocRef, payload);
       } else {
         await updateDoc(configDocRef, payload);
@@ -475,6 +518,7 @@ if (saveAiConfigButton) {
         payload.askCenter = globalConfig.askCenter;
         payload.centers = globalConfig.centers || [];
         payload.ratingItems = globalConfig.ratingItems || DEFAULT_RATING_ITEMS;
+        payload.authConfig = globalConfig.authConfig || DEFAULT_AUTH_CONFIG;
         await setDoc(configDocRef, payload);
       } else {
         await updateDoc(configDocRef, payload);
@@ -483,6 +527,39 @@ if (saveAiConfigButton) {
     } catch (err) {
       console.error("Error guardando configuración IA:", err);
       alert("No se ha podido guardar la configuración de IA.");
+    }
+  });
+}
+
+// Guardar claves de acceso
+if (savePasswordsButton) {
+  savePasswordsButton.addEventListener("click", async () => {
+    const current = mergeAuthConfig(globalConfig.authConfig);
+
+    const newAuthConfig = {
+      uploaderPassword: (uploaderPasswordInput?.value.trim() || current.uploaderPassword),
+      expertPassword: (expertPasswordInput?.value.trim() || current.expertPassword),
+      adminPassword: (adminPasswordInput?.value.trim() || current.adminPassword)
+    };
+
+    globalConfig.authConfig = newAuthConfig;
+
+    try {
+      const snap = await getDoc(configDocRef);
+      const payload = { authConfig: newAuthConfig };
+      if (!snap.exists()) {
+        payload.askCenter = globalConfig.askCenter;
+        payload.centers = globalConfig.centers || [];
+        payload.ratingItems = globalConfig.ratingItems || DEFAULT_RATING_ITEMS;
+        payload.aiConfig = globalConfig.aiConfig || DEFAULT_AI_CONFIG;
+        await setDoc(configDocRef, payload);
+      } else {
+        await updateDoc(configDocRef, payload);
+      }
+      alert("Claves de acceso actualizadas. A partir de ahora se usarán las nuevas claves.");
+    } catch (err) {
+      console.error("Error guardando claves de acceso:", err);
+      alert("No se han podido guardar las nuevas claves de acceso.");
     }
   });
 }
@@ -519,7 +596,7 @@ if (resetDbButton) {
 }
 
 // ================================================
-// Redimensionar y comprimir la imagen (ya adaptado a móvil)
+// Redimensionar y comprimir la imagen (adaptado a móvil)
 // ================================================
 function resizeImage(file, maxWidth = 1920, maxHeight = 1920, quality = 0.7) {
   return new Promise((resolve, reject) => {
@@ -608,6 +685,7 @@ function computeAiFeaturesFromDataUrl(dataUrl, aiConfig) {
 
         const lumArr = new Float32Array(n);
 
+        // 1) Luminancia y colorfulness básica
         for (let i = 0; i < n; i++) {
           const r = data[i * 4] / 255;
           const g = data[i * 4 + 1] / 255;
@@ -626,11 +704,11 @@ function computeAiFeaturesFromDataUrl(dataUrl, aiConfig) {
         const varLum = sumLum2 / n - meanLum * meanLum;
         const stdLum = Math.sqrt(Math.max(varLum, 0));
 
-        const brightnessRaw = meanLum;              // 0–1
-        const contrastRaw = stdLum;                // ~0–0.5
-        const colorfulnessRaw = sumColorDiff / n;  // 0–1 aprox
+        const brightnessRaw = meanLum;            // 0–1
+        const contrastRaw = stdLum;               // ~0–0.4
+        const colorfulnessRaw = sumColorDiff / n; // 0–1 aprox
 
-        // Edge density (muy simple, usando gradiente sobre la luminancia)
+        // 2) Edge density (muy simple, usando gradiente sobre luminancia)
         let edgeSum = 0;
         let edgeCount = 0;
         for (let y = 1; y < h - 1; y++) {
@@ -657,24 +735,39 @@ function computeAiFeaturesFromDataUrl(dataUrl, aiConfig) {
           edgeDensity: edgeDensityRaw
         };
 
-        // Normalización heurística por parámetro (0–1)
+        // Normalización heurística (0–1) por parámetro
         function normalizeFeature(name, value) {
           switch (name) {
-            case "brightness":
-              // Máximo cerca de 0.5, penaliza muy oscuro o muy quemado
-              return clamp01(1 - 2 * Math.abs(value - 0.5));
-            case "contrast":
-              // Asumimos contraste "interesante" en torno a 0.25
-              return clamp01(value / 0.25);
-            case "colorfulness":
-              // Valores habituales 0–0.6 aprox
-              return clamp01(value / 0.4);
-            case "edgeDensity":
-              // Algo de estructura; asumimos interesante hasta ~0.3
-              return clamp01(value / 0.3);
+            case "brightness": {
+              // Queremos evitar fotos demasiado oscuras o quemadas:
+              // pico alrededor de 0.55, caída progresiva hacia 0 y 1
+              const val = value;
+              const tri = 1 - Math.abs(val - 0.55) / 0.55; // ~1 en 0.55, ~0 en 0 o 1
+              return clamp01(tri);
+            }
+            case "contrast": {
+              // Contraste interesante suele estar en torno a 0.25–0.35
+              const norm = value / 0.30;
+              return clamp01(norm);
+            }
+            case "colorfulness": {
+              // Colores ricos alrededor de 0.3–0.5
+              const norm = value / 0.35;
+              return clamp01(norm);
+            }
+            case "edgeDensity": {
+              // Complejidad estructural: útil hasta ~0.3
+              const norm = value / 0.25;
+              return clamp01(norm);
+            }
             default:
               return clamp01(value);
           }
+        }
+
+        const normFeatures = {};
+        for (const key of Object.keys(features)) {
+          normFeatures[key] = normalizeFeature(key, features[key]);
         }
 
         const weights = aiConfig.features || {};
@@ -686,15 +779,25 @@ function computeAiFeaturesFromDataUrl(dataUrl, aiConfig) {
           if (!fConf || !fConf.enabled) continue;
           const wgt = Number(fConf.weight) || 0;
           if (wgt <= 0) continue;
-          const normVal = normalizeFeature(key, features[key]);
-          num += normVal * wgt;
+          num += normFeatures[key] * wgt;
           den += wgt;
         }
 
         let score = null;
         if (den > 0) {
-          const avg01 = num / den;          // 0–1
-          score = +(avg01 * 10).toFixed(1); // 0–10 con 1 decimal
+          const avg01 = num / den;
+
+          // Término de “sinergia”: combinación de contraste, color y bordes
+          const c = normFeatures.contrast ?? avg01;
+          const col = normFeatures.colorfulness ?? avg01;
+          const edge = normFeatures.edgeDensity ?? avg01;
+          const synergy = clamp01((c * col + col * edge + c * edge) / 3);
+
+          // Mezclamos media y sinergia para aumentar la variabilidad
+          const final01 = clamp01(0.7 * avg01 + 0.3 * synergy);
+
+          // Escala 0–10 con dos decimales
+          score = +(final01 * 10).toFixed(2);
         }
 
         resolve({ features, score });
@@ -733,7 +836,13 @@ document.getElementById("login-button").addEventListener("click", () => {
     return;
   }
 
-  if (password !== PASSWORDS[role]) {
+  const auth = globalConfig.authConfig || DEFAULT_AUTH_CONFIG;
+  let expected = "";
+  if (role === "uploader") expected = auth.uploaderPassword;
+  else if (role === "expert") expected = auth.expertPassword;
+  else if (role === "admin") expected = auth.adminPassword;
+
+  if (password !== expected) {
     alert("Clave incorrecta.");
     return;
   }
