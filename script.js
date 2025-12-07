@@ -393,14 +393,26 @@ if (resetDbButton) {
   });
 }
 
-// Función para redimensionar y comprimir la imagen antes de subirla (máx. 1920 px lado mayor)
+// ================================================
+// Redimensionar y comprimir la imagen (NUEVA VERSIÓN)
+// ================================================
+// Usamos URL.createObjectURL(file) en lugar de FileReader,
+// que suele funcionar mejor con fotos grandes de la galería
+// en móviles (Android/iOS).
+
 function resizeImage(file, maxWidth = 1920, maxHeight = 1920, quality = 0.7) {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
+    // Comprobación básica de tipo de archivo
+    if (!file.type || !file.type.startsWith("image/")) {
+      reject(new Error("El archivo seleccionado no es una imagen."));
+      return;
+    }
 
-    reader.onload = function (event) {
-      const img = new Image();
-      img.onload = function () {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+
+    img.onload = () => {
+      try {
         let width = img.width;
         let height = img.height;
 
@@ -415,26 +427,21 @@ function resizeImage(file, maxWidth = 1920, maxHeight = 1920, quality = 0.7) {
 
         ctx.drawImage(img, 0, 0, width, height);
 
-        try {
-          const dataUrl = canvas.toDataURL("image/jpeg", quality);
-          resolve(dataUrl);
-        } catch (err) {
-          reject(err);
-        }
-      };
-
-      img.onerror = function (err) {
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        URL.revokeObjectURL(url);
+        resolve(dataUrl);
+      } catch (err) {
+        URL.revokeObjectURL(url);
         reject(err);
-      };
-
-      img.src = event.target.result;
+      }
     };
 
-    reader.onerror = function (err) {
-      reject(err);
+    img.onerror = (err) => {
+      URL.revokeObjectURL(url);
+      reject(new Error("No se ha podido leer la imagen. El formato puede no ser compatible con este navegador."));
     };
 
-    reader.readAsDataURL(file);
+    img.src = url;
   });
 }
 
@@ -582,7 +589,7 @@ uploadForm.addEventListener("submit", async (e) => {
   } catch (err) {
     console.error("Error al procesar o guardar la fotografía:", err);
     uploadMessage.textContent =
-      "Ha ocurrido un error al guardar la fotografía: " + (err && err.message ? err.message : "");
+      "Ha ocurrido un problema al procesar la fotografía. Es posible que el formato de la imagen no sea compatible en este dispositivo.";
     uploadMessage.classList.add("error");
   }
 });
@@ -952,7 +959,6 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
       "expertoId"
     ];
 
-    // Añadimos columnas para cada ítem usando su etiqueta
     items.forEach(item => {
       header.push(item.label);
     });
@@ -1018,7 +1024,6 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
         const ratingsMap = r.ratings || {};
         items.forEach((item, idx) => {
           let val = ratingsMap[item.id];
-          // compatibilidad con sub1..sub5 antiguos
           if (val === undefined && r[`sub${idx + 1}`] !== undefined) {
             val = r[`sub${idx + 1}`];
           }
