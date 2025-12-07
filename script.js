@@ -1,4 +1,4 @@
-// script.js (versión con Firebase + Firestore)
+// script.js (versión con Firebase + Firestore + IA ligera)
 
 // ----- IMPORTS DE FIREBASE DESDE CDN -----
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
@@ -34,7 +34,7 @@ const photosCol = collection(db, "photos");
 const ratingsCol = collection(db, "ratings");
 const configDocRef = doc(db, "config", "general");
 
-// Ítems de valoración por defecto
+// Ítems de valoración por defecto (expertos)
 const DEFAULT_RATING_ITEMS = [
   { id: "item1", label: "Originalidad y novedad" },
   { id: "item2", label: "Expresión creativa y emocional" },
@@ -43,11 +43,23 @@ const DEFAULT_RATING_ITEMS = [
   { id: "item5", label: "Interacción y cocreación" }
 ];
 
+// Configuración IA ligera por defecto
+const DEFAULT_AI_CONFIG = {
+  enabled: false,
+  features: {
+    brightness: { enabled: true, weight: 25 },
+    contrast: { enabled: true, weight: 25 },
+    colorfulness: { enabled: true, weight: 25 },
+    edgeDensity: { enabled: true, weight: 25 }
+  }
+};
+
 // Configuración global simple
 let globalConfig = {
   askCenter: false,
   centers: [],
-  ratingItems: DEFAULT_RATING_ITEMS
+  ratingItems: DEFAULT_RATING_ITEMS,
+  aiConfig: DEFAULT_AI_CONFIG
 };
 
 // ----- CLAVES DE ACCESO -----
@@ -80,7 +92,19 @@ const ageChartNote = document.getElementById("age-chart-note");
 const loadPhotosButton = document.getElementById("load-photos-button");
 const photosList = document.getElementById("photos-list");
 
-// Rating dinámico
+// IA ligera: controles en Admin
+const aiEnabledToggle = document.getElementById("ai-enabled-toggle");
+const aiBrightnessEnabled = document.getElementById("ai-brightness-enabled");
+const aiBrightnessWeight = document.getElementById("ai-brightness-weight");
+const aiContrastEnabled = document.getElementById("ai-contrast-enabled");
+const aiContrastWeight = document.getElementById("ai-contrast-weight");
+const aiColorfulnessEnabled = document.getElementById("ai-colorfulness-enabled");
+const aiColorfulnessWeight = document.getElementById("ai-colorfulness-weight");
+const aiEdgeDensityEnabled = document.getElementById("ai-edgedensity-enabled");
+const aiEdgeDensityWeight = document.getElementById("ai-edgedensity-weight");
+const saveAiConfigButton = document.getElementById("save-ai-config-button");
+
+// Rating dinámico (expertos)
 const ratingItemsContainer = document.getElementById("rating-items-container");
 const puntfSpan = document.getElementById("puntf-value");
 let ratingControls = [];
@@ -143,6 +167,36 @@ function applyConfigToUpload() {
   centerWrapper.style.display = globalConfig.askCenter ? "block" : "none";
 }
 
+function applyAiConfigToAdmin() {
+  const ai = globalConfig.aiConfig || DEFAULT_AI_CONFIG;
+
+  if (aiEnabledToggle) {
+    aiEnabledToggle.checked = !!ai.enabled;
+  }
+
+  const feats = ai.features || DEFAULT_AI_CONFIG.features;
+
+  if (aiBrightnessEnabled && feats.brightness) {
+    aiBrightnessEnabled.checked = !!feats.brightness.enabled;
+    aiBrightnessWeight.value = feats.brightness.weight ?? 25;
+  }
+
+  if (aiContrastEnabled && feats.contrast) {
+    aiContrastEnabled.checked = !!feats.contrast.enabled;
+    aiContrastWeight.value = feats.contrast.weight ?? 25;
+  }
+
+  if (aiColorfulnessEnabled && feats.colorfulness) {
+    aiColorfulnessEnabled.checked = !!feats.colorfulness.enabled;
+    aiColorfulnessWeight.value = feats.colorfulness.weight ?? 25;
+  }
+
+  if (aiEdgeDensityEnabled && feats.edgeDensity) {
+    aiEdgeDensityEnabled.checked = !!feats.edgeDensity.enabled;
+    aiEdgeDensityWeight.value = feats.edgeDensity.weight ?? 25;
+  }
+}
+
 function applyConfigToAdmin() {
   if (askCenterToggle) {
     askCenterToggle.checked = !!globalConfig.askCenter;
@@ -153,6 +207,7 @@ function applyConfigToAdmin() {
   if (ratingItemsTextarea) {
     ratingItemsTextarea.value = (globalConfig.ratingItems || []).map(i => i.label).join("\n");
   }
+  applyAiConfigToAdmin();
 }
 
 function buildRatingControls() {
@@ -220,6 +275,24 @@ function updatePuntf() {
   }
 }
 
+// Merge IA config con defaults
+function mergeAiConfig(dataAi) {
+  const base = JSON.parse(JSON.stringify(DEFAULT_AI_CONFIG));
+  if (!dataAi) return base;
+
+  base.enabled = !!dataAi.enabled;
+
+  const srcFeat = dataAi.features || {};
+  for (const key of Object.keys(base.features)) {
+    if (srcFeat[key]) {
+      base.features[key].enabled = !!srcFeat[key].enabled;
+      const w = Number(srcFeat[key].weight);
+      base.features[key].weight = Number.isFinite(w) ? w : base.features[key].weight;
+    }
+  }
+  return base;
+}
+
 async function loadGlobalConfig() {
   try {
     const snap = await getDoc(configDocRef);
@@ -235,16 +308,19 @@ async function loadGlobalConfig() {
       } else {
         globalConfig.ratingItems = DEFAULT_RATING_ITEMS;
       }
+      globalConfig.aiConfig = mergeAiConfig(data.aiConfig);
     } else {
       globalConfig.askCenter = false;
       globalConfig.centers = [];
       globalConfig.ratingItems = DEFAULT_RATING_ITEMS;
+      globalConfig.aiConfig = DEFAULT_AI_CONFIG;
     }
   } catch (err) {
     console.error("Error cargando configuración global:", err);
     globalConfig.askCenter = false;
     globalConfig.centers = [];
     globalConfig.ratingItems = DEFAULT_RATING_ITEMS;
+    globalConfig.aiConfig = DEFAULT_AI_CONFIG;
   }
 
   applyConfigToUpload();
@@ -281,6 +357,7 @@ if (askCenterToggle) {
       if (!snap.exists()) {
         payload.centers = globalConfig.centers || [];
         payload.ratingItems = globalConfig.ratingItems || DEFAULT_RATING_ITEMS;
+        payload.aiConfig = globalConfig.aiConfig || DEFAULT_AI_CONFIG;
         await setDoc(configDocRef, payload);
       } else {
         await updateDoc(configDocRef, payload);
@@ -310,6 +387,7 @@ if (saveCentersButton) {
       if (!snap.exists()) {
         payload.askCenter = globalConfig.askCenter;
         payload.ratingItems = globalConfig.ratingItems || DEFAULT_RATING_ITEMS;
+        payload.aiConfig = globalConfig.aiConfig || DEFAULT_AI_CONFIG;
         await setDoc(configDocRef, payload);
       } else {
         await updateDoc(configDocRef, payload);
@@ -350,6 +428,7 @@ if (saveRatingItemsButton) {
       if (!snap.exists()) {
         payload.askCenter = globalConfig.askCenter;
         payload.centers = globalConfig.centers || [];
+        payload.aiConfig = globalConfig.aiConfig || DEFAULT_AI_CONFIG;
         await setDoc(configDocRef, payload);
       } else {
         await updateDoc(configDocRef, payload);
@@ -362,12 +441,58 @@ if (saveRatingItemsButton) {
   });
 }
 
+// Guardar configuración IA ligera
+if (saveAiConfigButton) {
+  saveAiConfigButton.addEventListener("click", async () => {
+    const ai = {
+      enabled: aiEnabledToggle ? aiEnabledToggle.checked : false,
+      features: {
+        brightness: {
+          enabled: aiBrightnessEnabled ? aiBrightnessEnabled.checked : true,
+          weight: Number(aiBrightnessWeight?.value || 0)
+        },
+        contrast: {
+          enabled: aiContrastEnabled ? aiContrastEnabled.checked : true,
+          weight: Number(aiContrastWeight?.value || 0)
+        },
+        colorfulness: {
+          enabled: aiColorfulnessEnabled ? aiColorfulnessEnabled.checked : true,
+          weight: Number(aiColorfulnessWeight?.value || 0)
+        },
+        edgeDensity: {
+          enabled: aiEdgeDensityEnabled ? aiEdgeDensityEnabled.checked : true,
+          weight: Number(aiEdgeDensityWeight?.value || 0)
+        }
+      }
+    };
+
+    globalConfig.aiConfig = ai;
+
+    try {
+      const snap = await getDoc(configDocRef);
+      const payload = { aiConfig: ai };
+      if (!snap.exists()) {
+        payload.askCenter = globalConfig.askCenter;
+        payload.centers = globalConfig.centers || [];
+        payload.ratingItems = globalConfig.ratingItems || DEFAULT_RATING_ITEMS;
+        await setDoc(configDocRef, payload);
+      } else {
+        await updateDoc(configDocRef, payload);
+      }
+      alert("Configuración de IA actualizada.");
+    } catch (err) {
+      console.error("Error guardando configuración IA:", err);
+      alert("No se ha podido guardar la configuración de IA.");
+    }
+  });
+}
+
 // Reinicializar base de datos (borrar todas las fotos y valoraciones)
 if (resetDbButton) {
   resetDbButton.addEventListener("click", async () => {
     const ok = confirm(
       "Esta acción borrará TODAS las fotografías y valoraciones de la base de datos. " +
-      "La configuración (centros, ítems, etc.) se mantendrá. ¿Seguro que quieres continuar?"
+      "La configuración (centros, ítems, IA, etc.) se mantendrá. ¿Seguro que quieres continuar?"
     );
     if (!ok) return;
 
@@ -394,15 +519,10 @@ if (resetDbButton) {
 }
 
 // ================================================
-// Redimensionar y comprimir la imagen (NUEVA VERSIÓN)
+// Redimensionar y comprimir la imagen (ya adaptado a móvil)
 // ================================================
-// Usamos URL.createObjectURL(file) en lugar de FileReader,
-// que suele funcionar mejor con fotos grandes de la galería
-// en móviles (Android/iOS).
-
 function resizeImage(file, maxWidth = 1920, maxHeight = 1920, quality = 0.7) {
   return new Promise((resolve, reject) => {
-    // Comprobación básica de tipo de archivo
     if (!file.type || !file.type.startsWith("image/")) {
       reject(new Error("El archivo seleccionado no es una imagen."));
       return;
@@ -436,12 +556,160 @@ function resizeImage(file, maxWidth = 1920, maxHeight = 1920, quality = 0.7) {
       }
     };
 
-    img.onerror = (err) => {
+    img.onerror = () => {
       URL.revokeObjectURL(url);
       reject(new Error("No se ha podido leer la imagen. El formato puede no ser compatible con este navegador."));
     };
 
     img.src = url;
+  });
+}
+
+// ================================================
+// IA ligera: análisis simple de la imagen en el cliente
+// ================================================
+function clamp01(x) {
+  if (x < 0) return 0;
+  if (x > 1) return 1;
+  return x;
+}
+
+function computeAiFeaturesFromDataUrl(dataUrl, aiConfig) {
+  return new Promise((resolve) => {
+    if (!aiConfig || !aiConfig.enabled) {
+      resolve({ features: null, score: null });
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      try {
+        // Reducimos la imagen a algo manejable, por ejemplo 256 px de lado mayor
+        const maxSide = 256;
+        let w = img.width;
+        let h = img.height;
+        const scale = Math.min(maxSide / w, maxSide / h, 1);
+        w = Math.max(1, Math.round(w * scale));
+        h = Math.max(1, Math.round(h * scale));
+
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+
+        const imgData = ctx.getImageData(0, 0, w, h);
+        const data = imgData.data;
+        const n = w * h;
+
+        let sumLum = 0;
+        let sumLum2 = 0;
+        let sumColorDiff = 0;
+
+        const lumArr = new Float32Array(n);
+
+        for (let i = 0; i < n; i++) {
+          const r = data[i * 4] / 255;
+          const g = data[i * 4 + 1] / 255;
+          const b = data[i * 4 + 2] / 255;
+
+          const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+          lumArr[i] = lum;
+          sumLum += lum;
+          sumLum2 += lum * lum;
+
+          const cd = (Math.abs(r - g) + Math.abs(r - b) + Math.abs(g - b)) / 3;
+          sumColorDiff += cd;
+        }
+
+        const meanLum = sumLum / n;
+        const varLum = sumLum2 / n - meanLum * meanLum;
+        const stdLum = Math.sqrt(Math.max(varLum, 0));
+
+        const brightnessRaw = meanLum;              // 0–1
+        const contrastRaw = stdLum;                // ~0–0.5
+        const colorfulnessRaw = sumColorDiff / n;  // 0–1 aprox
+
+        // Edge density (muy simple, usando gradiente sobre la luminancia)
+        let edgeSum = 0;
+        let edgeCount = 0;
+        for (let y = 1; y < h - 1; y++) {
+          for (let x = 1; x < w - 1; x++) {
+            const idx = y * w + x;
+            const idxL = y * w + (x - 1);
+            const idxR = y * w + (x + 1);
+            const idxU = (y - 1) * w + x;
+            const idxD = (y + 1) * w + x;
+
+            const dx = lumArr[idxR] - lumArr[idxL];
+            const dy = lumArr[idxD] - lumArr[idxU];
+            const mag = Math.sqrt(dx * dx + dy * dy);
+            edgeSum += mag;
+            edgeCount++;
+          }
+        }
+        const edgeDensityRaw = edgeCount > 0 ? edgeSum / edgeCount : 0; // 0–~0.7
+
+        const features = {
+          brightness: brightnessRaw,
+          contrast: contrastRaw,
+          colorfulness: colorfulnessRaw,
+          edgeDensity: edgeDensityRaw
+        };
+
+        // Normalización heurística por parámetro (0–1)
+        function normalizeFeature(name, value) {
+          switch (name) {
+            case "brightness":
+              // Máximo cerca de 0.5, penaliza muy oscuro o muy quemado
+              return clamp01(1 - 2 * Math.abs(value - 0.5));
+            case "contrast":
+              // Asumimos contraste "interesante" en torno a 0.25
+              return clamp01(value / 0.25);
+            case "colorfulness":
+              // Valores habituales 0–0.6 aprox
+              return clamp01(value / 0.4);
+            case "edgeDensity":
+              // Algo de estructura; asumimos interesante hasta ~0.3
+              return clamp01(value / 0.3);
+            default:
+              return clamp01(value);
+          }
+        }
+
+        const weights = aiConfig.features || {};
+        let num = 0;
+        let den = 0;
+
+        for (const key of Object.keys(features)) {
+          const fConf = weights[key];
+          if (!fConf || !fConf.enabled) continue;
+          const wgt = Number(fConf.weight) || 0;
+          if (wgt <= 0) continue;
+          const normVal = normalizeFeature(key, features[key]);
+          num += normVal * wgt;
+          den += wgt;
+        }
+
+        let score = null;
+        if (den > 0) {
+          const avg01 = num / den;          // 0–1
+          score = +(avg01 * 10).toFixed(1); // 0–10 con 1 decimal
+        }
+
+        resolve({ features, score });
+      } catch (err) {
+        console.error("Error calculando IA ligera:", err);
+        resolve({ features: null, score: null });
+      }
+    };
+
+    img.onerror = () => {
+      console.error("No se ha podido cargar la imagen para IA ligera.");
+      resolve({ features: null, score: null });
+    };
+
+    img.src = dataUrl;
   });
 }
 
@@ -550,6 +818,17 @@ uploadForm.addEventListener("submit", async (e) => {
       return;
     }
 
+    // IA ligera: cálculo de parámetros y score
+    let aiFeatures = null;
+    let aiScore = null;
+    try {
+      const aiResult = await computeAiFeaturesFromDataUrl(dataUrl, globalConfig.aiConfig);
+      aiFeatures = aiResult.features;
+      aiScore = aiResult.score;
+    } catch (err) {
+      console.error("Error IA ligera:", err);
+    }
+
     const docRef = await addDoc(photosCol, {
       dataUrl: dataUrl,
       age: ageValue,
@@ -566,6 +845,8 @@ uploadForm.addEventListener("submit", async (e) => {
       pcFrequency: pcFrequency,
       pcHours: pcHours,
       center: center,
+      aiFeatures: aiFeatures,
+      aiScore: aiScore,
       createdAt: new Date().toISOString()
     });
 
@@ -576,12 +857,14 @@ uploadForm.addEventListener("submit", async (e) => {
 
     uploadPreview.classList.remove("hidden");
     previewImage.src = dataUrl;
+    const aiText = aiScore != null ? ` | AI_PUNTF: ${aiScore}` : "";
     previewMeta.textContent =
       "ID: " + photoId +
       " | Edad: " + ageValue +
       " | Sexo: " + gender +
       " | Estudios: " + studies +
-      " | Bachillerato: " + (bachType || "N/A");
+      " | Bachillerato: " + (bachType || "N/A") +
+      aiText;
 
     uploadForm.reset();
     if (bachWrapper) bachWrapper.style.display = "none";
@@ -652,9 +935,11 @@ async function loadNextPhotoForExpert() {
     currentPhotoForExpert = photo;
 
     ratingPhoto.src = photo.dataUrl;
+    const aiText = photo.aiScore != null ? ` | AI_PUNTF: ${photo.aiScore}` : "";
     ratingPhotoInfo.textContent =
       `ID: ${photo.id} | Edad: ${photo.age} | Sexo: ${photo.gender} | ` +
-      `Estudios: ${photo.studies} | Bachillerato: ${photo.bachType || "N/A"}`;
+      `Estudios: ${photo.studies} | Bachillerato: ${photo.bachType || "N/A"}` +
+      aiText;
 
     ratingControls.forEach(rc => {
       rc.input.value = 5;
@@ -670,7 +955,7 @@ async function loadNextPhotoForExpert() {
   }
 }
 
-// Guardar valoración
+// Guardar valoración de experto
 document.getElementById("save-rating-button").addEventListener("click", async () => {
   if (!currentPhotoForExpert) return;
 
@@ -843,6 +1128,8 @@ async function loadAllPhotosWithRatings() {
       img.src = p.dataUrl;
       img.alt = "Fotografía " + photoId;
 
+      const aiText = p.aiScore != null ? ` | AI_PUNTF: ${p.aiScore}` : "";
+
       const meta = document.createElement("p");
       meta.innerHTML = `
         <strong>ID:</strong> ${photoId}<br>
@@ -850,7 +1137,7 @@ async function loadAllPhotosWithRatings() {
         Estudios: ${p.studies || ""} | Bachillerato: ${p.bachType || ""}<br>
         Vocación: ${p.vocation || ""}<br>
         Estudios padre: ${p.studiesFather || ""} | madre: ${p.studiesMother || ""}<br>
-        Centro: ${p.center || ""}
+        Centro: ${p.center || ""}${aiText ? "<br>" + aiText : ""}
       `;
 
       card.appendChild(img);
@@ -920,7 +1207,7 @@ if (loadPhotosButton) {
   loadPhotosButton.addEventListener("click", loadAllPhotosWithRatings);
 }
 
-// Exportar CSV dinámico con ítems configurables
+// Exportar CSV dinámico con ítems configurables + IA ligera
 document.getElementById("export-csv-button").addEventListener("click", async () => {
   try {
     const photosSnap = await getDocs(photosCol);
@@ -956,6 +1243,11 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
       "frecuencia_uso_ordenador",
       "horas_diarias_ordenador",
       "centro_educativo",
+      "ai_brightness",
+      "ai_contrast",
+      "ai_colorfulness",
+      "ai_edgeDensity",
+      "ai_score",
       "expertoId"
     ];
 
@@ -970,6 +1262,7 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
 
     if (ratingsSnap.empty) {
       Object.entries(photos).forEach(([id, p]) => {
+        const f = p.aiFeatures || {};
         const base = [
           id,
           p.gender || "",
@@ -986,6 +1279,11 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
           p.pcFrequency || "",
           p.pcHours ?? "",
           p.center || "",
+          f.brightness ?? "",
+          f.contrast ?? "",
+          f.colorfulness ?? "",
+          f.edgeDensity ?? "",
+          p.aiScore ?? "",
           ""
         ];
 
@@ -1001,6 +1299,8 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
         const r = docSnap.data();
         const p = photos[r.photoId];
         if (!p) return;
+
+        const f = p.aiFeatures || {};
 
         const base = [
           r.photoId,
@@ -1018,6 +1318,11 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
           p.pcFrequency || "",
           p.pcHours ?? "",
           p.center || "",
+          f.brightness ?? "",
+          f.contrast ?? "",
+          f.colorfulness ?? "",
+          f.edgeDensity ?? "",
+          p.aiScore ?? "",
           r.expertId || ""
         ];
 

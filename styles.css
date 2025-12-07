@@ -294,3 +294,31 @@ button.secondary:hover {
   background: #e8eaf6;
   font-weight: 600;
 }
+
+/* ----- Configuración IA ligera ----- */
+
+.ai-config-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+.ai-config-table th,
+.ai-config-table td {
+  border: 1px solid #e0e0e0;
+  padding: 0.25rem 0.5rem;
+}
+
+.ai-config-table thead th {
+  background: #e8eaf6;
+  font-weight: 600;
+}
+
+.small-input {
+  width: 80px;
+}
+
+.center-cell {
+  text-align: center;
+}

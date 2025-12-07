@@ -260,13 +260,79 @@
         <p class="note">Estos ítems se utilizarán en la interfaz de valoración de las fotografías.</p>
       </div>
 
+      <h3>Valoración automática (IA ligera)</h3>
+      <div class="form-group">
+        <label>
+          <input type="checkbox" id="ai-enabled-toggle">
+          Activar valoración automática de creatividad (AI_PUNTF)
+        </label>
+        <p class="note">
+          Se calcularán algunos parámetros visuales simples en el navegador (brillo, contraste, color, complejidad)
+          y se combinarán en un índice de 0 a 10.
+        </p>
+      </div>
+
+      <div class="form-group" id="ai-config-block">
+        <table class="ai-config-table">
+          <thead>
+            <tr>
+              <th>Parámetro</th>
+              <th>Usar</th>
+              <th>Peso (0–100)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Brillo global</td>
+              <td class="center-cell">
+                <input type="checkbox" id="ai-brightness-enabled">
+              </td>
+              <td>
+                <input type="number" id="ai-brightness-weight" min="0" max="100" class="small-input">
+              </td>
+            </tr>
+            <tr>
+              <td>Contraste</td>
+              <td class="center-cell">
+                <input type="checkbox" id="ai-contrast-enabled">
+              </td>
+              <td>
+                <input type="number" id="ai-contrast-weight" min="0" max="100" class="small-input">
+              </td>
+            </tr>
+            <tr>
+              <td>Intensidad de color</td>
+              <td class="center-cell">
+                <input type="checkbox" id="ai-colorfulness-enabled">
+              </td>
+              <td>
+                <input type="number" id="ai-colorfulness-weight" min="0" max="100" class="small-input">
+              </td>
+            </tr>
+            <tr>
+              <td>Complejidad (bordes)</td>
+              <td class="center-cell">
+                <input type="checkbox" id="ai-edgedensity-enabled">
+              </td>
+              <td>
+                <input type="number" id="ai-edgedensity-weight" min="0" max="100" class="small-input">
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <button type="button" id="save-ai-config-button">Guardar configuración IA</button>
+        <p class="note">
+          El peso es la importancia relativa de cada parámetro en el índice automático. Solo cuentan los parámetros marcados.
+        </p>
+      </div>
+
       <h3>Gestión del experimento</h3>
       <div class="form-group">
         <button type="button" id="reset-db-button" class="danger-button">
           Reinicializar base de datos (borrar todas las fotografías y valoraciones)
         </button>
         <p class="note">
-          Úsalo solo cuando quieras comenzar un experimento desde cero. No afecta a la configuración (centros, ítems, etc.).
+          Úsalo solo cuando quieras comenzar un experimento desde cero. No afecta a la configuración (centros, ítems, IA, etc.).
         </p>
       </div>
 
