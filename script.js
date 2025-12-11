@@ -99,6 +99,7 @@ const bachWrapper = document.getElementById("bach-wrapper");
 const ageChart = document.getElementById("age-chart");
 const ageChartNote = document.getElementById("age-chart-note");
 const loadPhotosButton = document.getElementById("load-photos-button");
+const photosList = document.getElementById("photos-list");
 
 // IA ligera: controles en Admin
 const aiEnabledToggle = document.getElementById("ai-enabled-toggle");
@@ -577,7 +578,7 @@ if (savePasswordsButton) {
         payload.centers = globalConfig.centers || [];
         payload.ratingItems = globalConfig.ratingItems || DEFAULT_RATING_ITEMS;
         payload.aiConfig = globalConfig.aiConfig || DEFAULT_AI_CONFIG;
-        payload.deepAI = globalConfig.deepAI || DEFAULT_DEEP_AI_CONFIG;
+        payload.deepAI = globalConfig.deepAI || DEEP_AI_CONFIG;
         await setDoc(configDocRef, payload);
       } else {
         await updateDoc(configDocRef, payload);
