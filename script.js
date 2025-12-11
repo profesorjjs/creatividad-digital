@@ -61,7 +61,7 @@ const DEFAULT_AUTH_CONFIG = {
   adminPassword: "admin2025"
 };
 
-// NUEVO: configuración por defecto de IA profunda (microservicio externo)
+// Configuración por defecto de IA profunda (microservicio externo)
 const DEEP_AI_CONFIG = {
   enabled: true, // pon false si quieres desactivarla temporalmente
   endpoint: "https://TU-ENDPOINT-DEEP-AI.com/analyze", // ← CAMBIA ESTA URL
@@ -99,7 +99,6 @@ const bachWrapper = document.getElementById("bach-wrapper");
 const ageChart = document.getElementById("age-chart");
 const ageChartNote = document.getElementById("age-chart-note");
 const loadPhotosButton = document.getElementById("load-photos-button");
-const photosList = document.getElementById("photos-list");
 
 // IA ligera: controles en Admin
 const aiEnabledToggle = document.getElementById("ai-enabled-toggle");
@@ -766,25 +765,21 @@ function computeAiFeaturesFromDataUrl(dataUrl, aiConfig) {
         function normalizeFeature(name, value) {
           switch (name) {
             case "brightness": {
-              // Queremos evitar fotos demasiado oscuras o quemadas:
-              // pico alrededor de 0.55, caída progresiva hacia 0 y 1
+              // Evitar fotos demasiado oscuras o quemadas:
               const val = value;
               const tri = 1 - Math.abs(val - 0.55) / 0.55; // ~1 en 0.55, ~0 en 0 o 1
               return clamp01(tri);
             }
             case "contrast": {
-              // Contraste interesante suele estar en torno a 0.25–0.35
-              const norm = value / 0.30;
+              const norm = value / 0.30; // contraste interesante ~0.25–0.35
               return clamp01(norm);
             }
             case "colorfulness": {
-              // Colores ricos alrededor de 0.3–0.5
-              const norm = value / 0.35;
+              const norm = value / 0.35; // colores ricos ~0.3–0.5
               return clamp01(norm);
             }
             case "edgeDensity": {
-              // Complejidad estructural: útil hasta ~0.3
-              const norm = value / 0.25;
+              const norm = value / 0.25; // complejidad estructural
               return clamp01(norm);
             }
             default:
@@ -814,13 +809,12 @@ function computeAiFeaturesFromDataUrl(dataUrl, aiConfig) {
         if (den > 0) {
           const avg01 = num / den;
 
-          // Término de “sinergia”: combinación de contraste, color y bordes
+          // Término de “sinergia”: contraste, color y bordes
           const c = normFeatures.contrast ?? avg01;
           const col = normFeatures.colorfulness ?? avg01;
           const edge = normFeatures.edgeDensity ?? avg01;
           const synergy = clamp01((c * col + col * edge + c * edge) / 3);
 
-          // Mezclamos media y sinergia para aumentar la variabilidad
           const final01 = clamp01(0.7 * avg01 + 0.3 * synergy);
 
           // Escala 0–10 con dos decimales
@@ -844,7 +838,7 @@ function computeAiFeaturesFromDataUrl(dataUrl, aiConfig) {
 }
 
 // ================================================
-// IA local avanzada: análisis compositivo (tercios, horizonte, φ…)
+// IA local avanzada: análisis compositivo
 // ================================================
 async function computeLocalAdvancedAnalysis(dataUrl) {
   return new Promise((resolve) => {
@@ -862,7 +856,7 @@ async function computeLocalAdvancedAnalysis(dataUrl) {
 
         const pix = ctx.getImageData(0, 0, W, H).data;
 
-        // ---- 1. Centro visual aproximado (contraste local) ----
+        // 1. Centro visual aproximado
         let cx = 0, cy = 0, totalWeight = 0;
         for (let y = 1; y < H - 1; y += 4) {
           for (let x = 1; x < W - 1; x += 4) {
@@ -889,7 +883,7 @@ async function computeLocalAdvancedAnalysis(dataUrl) {
           centerY = cy / totalWeight;
         }
 
-        // ---- 2. Regla de los tercios ----
+        // 2. Regla de los tercios
         const tX1 = W / 3, tX2 = (2 * W) / 3;
         const tY1 = H / 3, tY2 = (2 * H) / 3;
         const maxDiag = Math.sqrt(W * W + H * H);
@@ -905,7 +899,7 @@ async function computeLocalAdvancedAnalysis(dataUrl) {
         const minD = Math.min(d1, d2, d3, d4);
         const thirdsScore01 = 1 - clamp01((minD / maxDiag) * 2.5);
 
-        // ---- 3. Horizonte (borde horizontal fuerte) ----
+        // 3. Horizonte (borde horizontal fuerte)
         let bestY = 0;
         let bestStrength = 0;
 
@@ -931,14 +925,14 @@ async function computeLocalAdvancedAnalysis(dataUrl) {
         const dH = Math.min(Math.abs(bestY - idealH1), Math.abs(bestY - idealH2));
         const horizonScore01 = 1 - clamp01((dH / H) * 1.8);
 
-        // ---- 4. Proporción áurea (φ) ----
+        // 4. Proporción áurea
         const phi = 0.618;
         const gx = W * phi;
         const gy = H * phi;
         const dG = dist(centerX, centerY, gx, gy);
         const goldenScore01 = 1 - clamp01((dG / maxDiag) * 3.2);
 
-        // ---- 5. Saliencia básica por gradiente ----
+        // 5. Saliencia básica
         let salSum = 0;
         let salCount = 0;
         for (let y = 1; y < H - 1; y += 3) {
@@ -1018,8 +1012,7 @@ async function computeDeepAI(dataUrl) {
       method: "POST",
       signal: controller.signal,
       headers: { "Content-Type": "application/json" },
-      // Adapta la clave "imageBase64" al contrato real de tu microservicio
-      body: JSON.stringify({ imageBase64: dataUrl })
+      body: JSON.stringify({ imageBase64: dataUrl }) // adapta la clave al contrato real
     });
 
     clearTimeout(timeoutId);
@@ -1105,38 +1098,40 @@ function showSection(sectionId) {
   }
 }
 
-
 // ----- LOGIN / ACCESO POR ROL -----
-document.getElementById("login-button").addEventListener("click", () => {
-  const role = document.getElementById("role-select").value;
-  const password = document.getElementById("access-password").value.trim();
+const loginButton = document.getElementById("login-button");
+if (loginButton) {
+  loginButton.addEventListener("click", () => {
+    const role = document.getElementById("role-select").value;
+    const password = document.getElementById("access-password").value.trim();
 
-  if (!role) {
-    alert("Selecciona un tipo de acceso.");
-    return;
-  }
+    if (!role) {
+      alert("Selecciona un tipo de acceso.");
+      return;
+    }
 
-  const auth = globalConfig.authConfig || DEFAULT_AUTH_CONFIG;
-  let expected = "";
-  if (role === "uploader") expected = auth.uploaderPassword;
-  else if (role === "expert") expected = auth.expertPassword;
-  else if (role === "admin") expected = auth.adminPassword;
+    const auth = globalConfig.authConfig || DEFAULT_AUTH_CONFIG;
+    let expected = "";
+    if (role === "uploader") expected = auth.uploaderPassword;
+    else if (role === "expert") expected = auth.expertPassword;
+    else if (role === "admin") expected = auth.adminPassword;
 
-  if (password !== expected) {
-    alert("Clave incorrecta.");
-    return;
-  }
+    if (password !== expected) {
+      alert("Clave incorrecta.");
+      return;
+    }
 
-  loginSection.classList.add("hidden");
+    loginSection.classList.add("hidden");
 
-  if (role === "uploader") {
-    showSection("upload");
-  } else if (role === "expert") {
-    showSection("expert");
-  } else if (role === "admin") {
-    showSection("admin");
-  }
-});
+    if (role === "uploader") {
+      showSection("upload");
+    } else if (role === "expert") {
+      showSection("expert");
+    } else if (role === "admin") {
+      showSection("admin");
+    }
+  });
+}
 
 // ----- SUBIDA DE FOTOGRAFÍA (FIRESTORE + IA) -----
 const uploadForm = document.getElementById("upload-form");
@@ -1145,7 +1140,7 @@ const uploadPreview = document.getElementById("upload-preview");
 const previewImage = document.getElementById("preview-image");
 const previewMeta = document.getElementById("preview-meta");
 
-// NUEVO: bloques de análisis automático en la vista de subida
+// Bloques de análisis automático en la vista de subida
 const uploadAiAnalysis = document.getElementById("upload-ai-analysis");
 const aiLightScoreSpan = document.getElementById("ai-light-score");
 const aiLocalScoreSpan = document.getElementById("ai-local-score");
@@ -1303,7 +1298,7 @@ if (uploadForm) {
       return;
     }
 
-    // --- Si todo está correcto, continuamos como antes ---
+    // --- Si todo está correcto, continuamos ---
 
     const file = fileInput.files[0];
 
@@ -1440,58 +1435,6 @@ if (uploadForm) {
   });
 }
 
-
-    const photoId = docRef.id;
-
-    uploadMessage.textContent = "Fotografía guardada correctamente en la base de datos. ¡Gracias por tu participación!";
-    uploadMessage.className = "message success";
-
-    uploadPreview.classList.remove("hidden");
-    previewImage.src = dataUrl;
-
-    const aiText = aiScore != null ? ` | AI_PUNTF: ${aiScore}` : "";
-    const localText = localAdvanced?.localAdvancedScore != null ? ` | IA_local: ${localAdvanced.localAdvancedScore}` : "";
-    const deepText = deepAI?.deepScore != null ? ` | IA_profunda: ${deepAI.deepScore}` : "";
-
-    previewMeta.textContent =
-      "ID: " + photoId +
-      " | Edad: " + ageValue +
-      " | Sexo: " + gender +
-      " | Estudios: " + studies +
-      " | Bachillerato: " + (bachType || "N/A") +
-      aiText + localText + deepText;
-
-    if (uploadAiAnalysis) {
-      uploadAiAnalysis.classList.remove("hidden");
-      if (aiLightScoreSpan) {
-        aiLightScoreSpan.textContent = aiScore != null ? aiScore.toFixed(2) : "–";
-      }
-      if (aiLocalScoreSpan) {
-        aiLocalScoreSpan.textContent =
-          localAdvanced?.localAdvancedScore != null
-            ? localAdvanced.localAdvancedScore.toFixed(2)
-            : "–";
-      }
-      if (aiDeepScoreSpan) {
-        aiDeepScoreSpan.textContent =
-          deepAI?.deepScore != null ? deepAI.deepScore.toFixed(2) : "–";
-      }
-      if (aiDeepExplanationP) {
-        aiDeepExplanationP.textContent = deepAI?.deepExplanation || "";
-      }
-    }
-
-    uploadForm.reset();
-    if (bachWrapper) bachWrapper.style.display = "none";
-    applyConfigToUpload(); // reconstruir select de centros tras reset
-  } catch (err) {
-    console.error("Error al procesar o guardar la fotografía:", err);
-    uploadMessage.textContent =
-      "Ha ocurrido un problema al procesar la fotografía. Es posible que el formato de la imagen no sea compatible en este dispositivo.";
-    uploadMessage.classList.add("error");
-  }
-});
-
 // ----- VALORACIÓN POR EXPERTOS -----
 const ratingArea = document.getElementById("rating-area");
 const noPhotosMessage = document.getElementById("no-photos-message");
@@ -1502,16 +1445,19 @@ const ratingMessage = document.getElementById("rating-message");
 
 let currentPhotoForExpert = null;
 
-document.getElementById("start-rating-button").addEventListener("click", () => {
-  const expertId = document.getElementById("expert-id").value.trim();
-  if (!expertId) {
-    alert("Introduce tu código de experto/a.");
-    return;
-  }
+const startRatingButton = document.getElementById("start-rating-button");
+if (startRatingButton) {
+  startRatingButton.addEventListener("click", () => {
+    const expertId = document.getElementById("expert-id").value.trim();
+    if (!expertId) {
+      alert("Introduce tu código de experto/a.");
+      return;
+    }
 
-  ratingArea.classList.remove("hidden");
-  loadNextPhotoForExpert();
-});
+    ratingArea.classList.remove("hidden");
+    loadNextPhotoForExpert();
+  });
+}
 
 async function loadNextPhotoForExpert() {
   const expertId = document.getElementById("expert-id").value.trim();
@@ -1579,53 +1525,59 @@ async function loadNextPhotoForExpert() {
 }
 
 // Guardar valoración de experto
-document.getElementById("save-rating-button").addEventListener("click", async () => {
-  if (!currentPhotoForExpert) return;
+const saveRatingButton = document.getElementById("save-rating-button");
+if (saveRatingButton) {
+  saveRatingButton.addEventListener("click", async () => {
+    if (!currentPhotoForExpert) return;
 
-  const expertId = document.getElementById("expert-id").value.trim();
-  if (!expertId) {
-    alert("Introduce tu código de experto/a.");
-    return;
-  }
+    const expertId = document.getElementById("expert-id").value.trim();
+    if (!expertId) {
+      alert("Introduce tu código de experto/a.");
+      return;
+    }
 
-  if (!ratingControls.length) {
-    alert("No hay ítems de valoración configurados.");
-    return;
-  }
+    if (!ratingControls.length) {
+      alert("No hay ítems de valoración configurados.");
+      return;
+    }
 
-  const ratingsMap = {};
-  let sum = 0;
-  ratingControls.forEach(rc => {
-    const v = Number(rc.input.value);
-    sum += v;
-    ratingsMap[rc.config.id] = v;
-  });
-  const puntf = sum / ratingControls.length;
-
-  try {
-    await addDoc(ratingsCol, {
-      photoId: currentPhotoForExpert.id,
-      expertId,
-      ratings: ratingsMap,
-      puntf,
-      createdAt: new Date().toISOString()
+    const ratingsMap = {};
+    let sum = 0;
+    ratingControls.forEach(rc => {
+      const v = Number(rc.input.value);
+      sum += v;
+      ratingsMap[rc.config.id] = v;
     });
+    const puntf = sum / ratingControls.length;
 
-    ratingMessage.textContent = "Valoración guardada.";
-    ratingMessage.className = "message success";
+    try {
+      await addDoc(ratingsCol, {
+        photoId: currentPhotoForExpert.id,
+        expertId,
+        ratings: ratingsMap,
+        puntf,
+        createdAt: new Date().toISOString()
+      });
 
-    loadNextPhotoForExpert();
-  } catch (err) {
-    console.error(err);
-    ratingMessage.textContent = "Error al guardar la valoración.";
-    ratingMessage.className = "message error";
-  }
-});
+      ratingMessage.textContent = "Valoración guardada.";
+      ratingMessage.className = "message success";
+
+      loadNextPhotoForExpert();
+    } catch (err) {
+      console.error(err);
+      ratingMessage.textContent = "Error al guardar la valoración.";
+      ratingMessage.className = "message error";
+    }
+  });
+}
 
 // Omitir foto
-document.getElementById("skip-photo-button").addEventListener("click", () => {
-  loadNextPhotoForExpert();
-});
+const skipPhotoButton = document.getElementById("skip-photo-button");
+if (skipPhotoButton) {
+  skipPhotoButton.addEventListener("click", () => {
+    loadNextPhotoForExpert();
+  });
+}
 
 // ----- PANEL ADMIN / RESUMEN + EXPORTAR CSV + VISUALIZACIÓN -----
 async function updateAdminSummary() {
@@ -1837,195 +1789,197 @@ if (loadPhotosButton) {
 }
 
 // Exportar CSV dinámico con ítems configurables + IA ligera + IA avanzada + IA profunda
-document.getElementById("export-csv-button").addEventListener("click", async () => {
-  try {
-    const photosSnap = await getDocs(photosCol);
-    const ratingsSnap = await getDocs(ratingsCol);
+const exportCsvButton = document.getElementById("export-csv-button");
+if (exportCsvButton) {
+  exportCsvButton.addEventListener("click", async () => {
+    try {
+      const photosSnap = await getDocs(photosCol);
+      const ratingsSnap = await getDocs(ratingsCol);
 
-    if (photosSnap.empty) {
-      alert("No hay fotografías almacenadas.");
-      return;
-    }
+      if (photosSnap.empty) {
+        alert("No hay fotografías almacenadas.");
+        return;
+      }
 
-    const photos = {};
-    photosSnap.docs.forEach(docSnap => {
-      photos[docSnap.id] = docSnap.data();
-    });
+      const photos = {};
+      photosSnap.docs.forEach(docSnap => {
+        photos[docSnap.id] = docSnap.data();
+      });
 
-    const items = globalConfig.ratingItems && globalConfig.ratingItems.length
-      ? globalConfig.ratingItems
-      : DEFAULT_RATING_ITEMS;
+      const items = globalConfig.ratingItems && globalConfig.ratingItems.length
+        ? globalConfig.ratingItems
+        : DEFAULT_RATING_ITEMS;
 
-    const header = [
-      "fotoId",
-      "sexo",
-      "edad",
-      "estudios",
-      "tipoBach",
-      "vocacion",
-      "estudios_padre",
-      "estudios_madre",
-      "repite_curso",
-      "suspensos",
-      "num_ordenadores_casa",
-      "ordenador_habitacion",
-      "frecuencia_uso_ordenador",
-      "horas_diarias_ordenador",
-      "centro_educativo",
-      "ai_brightness",
-      "ai_contrast",
-      "ai_colorfulness",
-      "ai_edgeDensity",
-      "ai_score",
-      "local_thirds",
-      "local_horizon",
-      "local_golden",
-      "local_salience",
-      "local_score",
-      "deep_score",
-      "deep_explanation",
-      "expertoId"
-    ];
+      const header = [
+        "fotoId",
+        "sexo",
+        "edad",
+        "estudios",
+        "tipoBach",
+        "vocacion",
+        "estudios_padre",
+        "estudios_madre",
+        "repite_curso",
+        "suspensos",
+        "num_ordenadores_casa",
+        "ordenador_habitacion",
+        "frecuencia_uso_ordenador",
+        "horas_diarias_ordenador",
+        "centro_educativo",
+        "ai_brightness",
+        "ai_contrast",
+        "ai_colorfulness",
+        "ai_edgeDensity",
+        "ai_score",
+        "local_thirds",
+        "local_horizon",
+        "local_golden",
+        "local_salience",
+        "local_score",
+        "deep_score",
+        "deep_explanation",
+        "expertoId"
+      ];
 
-    items.forEach(item => {
-      header.push(item.label);
-    });
+      items.forEach(item => {
+        header.push(item.label);
+      });
 
-    header.push("puntf");
+      header.push("puntf");
 
-    const rows = [];
-    rows.push(header);
+      const rows = [];
+      rows.push(header);
 
-    const ratingsArr = ratingsSnap.docs.map(docSnap => ({
-      id: docSnap.id,
-      ...docSnap.data()
-    }));
+      const ratingsArr = ratingsSnap.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }));
 
-    if (ratingsArr.length === 0) {
-      // Sin valoraciones: una fila por foto
-      Object.entries(photos).forEach(([id, p]) => {
-        const f = p.aiFeatures || {};
-        const adv = p.localAdvanced || {};
-        const deep = p.deepAI || {};
+      if (ratingsArr.length === 0) {
+        // Sin valoraciones: una fila por foto
+        Object.entries(photos).forEach(([id, p]) => {
+          const f = p.aiFeatures || {};
+          const adv = p.localAdvanced || {};
+          const deep = p.deepAI || {};
 
-        const base = [
-          id,
-          p.gender || "",
-          p.age ?? "",
-          p.studies || "",
-          p.bachType || "",
-          p.vocation || "",
-          p.studiesFather || "",
-          p.studiesMother || "",
-          p.rep || "",
-          p.fail || "",
-          p.pcsHome ?? "",
-          p.pcRoom || "",
-          p.pcFrequency || "",
-          p.pcHours ?? "",
-          p.center || "",
-          f.brightness ?? "",
-          f.contrast ?? "",
-          f.colorfulness ?? "",
-          f.edgeDensity ?? "",
-          p.aiScore ?? "",
-          adv.thirdsScore ?? "",
-          adv.horizonScore ?? "",
-          adv.goldenScore ?? "",
-          adv.salienceScore ?? "",
-          adv.localAdvancedScore ?? "",
-          deep.deepScore ?? "",
-          deep.deepExplanation ?? "",
-          ""
-        ];
+          const base = [
+            id,
+            p.gender || "",
+            p.age ?? "",
+            p.studies || "",
+            p.bachType || "",
+            p.vocation || "",
+            p.studiesFather || "",
+            p.studiesMother || "",
+            p.rep || "",
+            p.fail || "",
+            p.pcsHome ?? "",
+            p.pcRoom || "",
+            p.pcFrequency || "",
+            p.pcHours ?? "",
+            p.center || "",
+            f.brightness ?? "",
+            f.contrast ?? "",
+            f.colorfulness ?? "",
+            f.edgeDensity ?? "",
+            p.aiScore ?? "",
+            adv.thirdsScore ?? "",
+            adv.horizonScore ?? "",
+            adv.goldenScore ?? "",
+            adv.salienceScore ?? "",
+            adv.localAdvancedScore ?? "",
+            deep.deepScore ?? "",
+            deep.deepExplanation ?? "",
+            ""
+          ];
 
-        items.forEach(() => {
+          items.forEach(() => {
+            base.push("");
+          });
+
           base.push("");
+          rows.push(base);
         });
+      } else {
+        // Con valoraciones: una fila por valoración
+        ratingsArr.forEach(r => {
+          const p = photos[r.photoId];
+          if (!p) return;
 
-        base.push("");
-        rows.push(base);
-      });
-    } else {
-      // Con valoraciones: una fila por valoración
-      ratingsArr.forEach(r => {
-        const p = photos[r.photoId];
-        if (!p) return;
+          const f = p.aiFeatures || {};
+          const adv = p.localAdvanced || {};
+          const deep = p.deepAI || {};
 
-        const f = p.aiFeatures || {};
-        const adv = p.localAdvanced || {};
-        const deep = p.deepAI || {};
+          const base = [
+            r.photoId,
+            p.gender || "",
+            p.age ?? "",
+            p.studies || "",
+            p.bachType || "",
+            p.vocation || "",
+            p.studiesFather || "",
+            p.studiesMother || "",
+            p.rep || "",
+            p.fail || "",
+            p.pcsHome ?? "",
+            p.pcRoom || "",
+            p.pcFrequency || "",
+            p.pcHours ?? "",
+            p.center || "",
+            f.brightness ?? "",
+            f.contrast ?? "",
+            f.colorfulness ?? "",
+            f.edgeDensity ?? "",
+            p.aiScore ?? "",
+            adv.thirdsScore ?? "",
+            adv.horizonScore ?? "",
+            adv.goldenScore ?? "",
+            adv.salienceScore ?? "",
+            adv.localAdvancedScore ?? "",
+            deep.deepScore ?? "",
+            deep.deepExplanation ?? "",
+            r.expertId || ""
+          ];
 
-        const base = [
-          r.photoId,
-          p.gender || "",
-          p.age ?? "",
-          p.studies || "",
-          p.bachType || "",
-          p.vocation || "",
-          p.studiesFather || "",
-          p.studiesMother || "",
-          p.rep || "",
-          p.fail || "",
-          p.pcsHome ?? "",
-          p.pcRoom || "",
-          p.pcFrequency || "",
-          p.pcHours ?? "",
-          p.center || "",
-          f.brightness ?? "",
-          f.contrast ?? "",
-          f.colorfulness ?? "",
-          f.edgeDensity ?? "",
-          p.aiScore ?? "",
-          adv.thirdsScore ?? "",
-          adv.horizonScore ?? "",
-          adv.goldenScore ?? "",
-          adv.salienceScore ?? "",
-          adv.localAdvancedScore ?? "",
-          deep.deepScore ?? "",
-          deep.deepExplanation ?? "",
-          r.expertId || ""
-        ];
+          const ratingsMap = r.ratings || {};
+          items.forEach((item, idx) => {
+            let val = ratingsMap[item.id];
+            if (val === undefined && r[`sub${idx + 1}`] !== undefined) {
+              val = r[`sub${idx + 1}`];
+            }
+            base.push(val ?? "");
+          });
 
-        const ratingsMap = r.ratings || {};
-        items.forEach((item, idx) => {
-          let val = ratingsMap[item.id];
-          if (val === undefined && r[`sub${idx + 1}`] !== undefined) {
-            val = r[`sub${idx + 1}`];
+          base.push(typeof r.puntf === "number" ? r.puntf.toFixed(2) : "");
+          rows.push(base);
+        });
+      }
+
+      const csvContent = rows.map(row =>
+        row.map(value => {
+          const str = String(value ?? "");
+          if (str.includes(";") || str.includes("\"")) {
+            return `"${str.replace(/"/g, '""')}"`;
           }
-          base.push(val ?? "");
-        });
+          return str;
+        }).join(";")
+      ).join("\n");
 
-        base.push(typeof r.puntf === "number" ? r.puntf.toFixed(2) : "");
-        rows.push(base);
-      });
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const now = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `creatividad_digital_${now}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      alert("CSV generado y descargado.");
+    } catch (err) {
+      console.error(err);
+      alert("Ha ocurrido un error al generar el CSV.");
     }
-
-    const csvContent = rows.map(row =>
-      row.map(value => {
-        const str = String(value ?? "");
-        if (str.includes(";") || str.includes("\"")) {
-          return `"${str.replace(/"/g, '""')}"`;
-        }
-        return str;
-      }).join(";")
-    ).join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const now = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `creatividad_digital_${now}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    alert("CSV generado y descargado.");
-  } catch (err) {
-    console.error(err);
-    alert("Ha ocurrido un error al generar el CSV.");
-  }
-});
-
+  });
+}
