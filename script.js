@@ -1044,9 +1044,12 @@ async function computeDeepAI(dataUrl) {
 // GESTIÓN DE SECCIONES Y LOGIN
 // --------------------------------------------------------------
 function showSection(sectionId) {
-  [uploadSection, expertSection, adminSection].forEach(sec => sec.classList.add("hidden"));
+  // Ocultar todas las secciones primero
+  [uploadSection, expertSection, adminSection].forEach((sec) => {
+    if (sec) sec.classList.add("hidden");
+  });
 
-  if (sectionId === "upload") {
+  if (sectionId === "upload" && uploadSection) {
     uploadSection.classList.remove("hidden");
 
     // Limpiar formulario y mensajes
@@ -1058,7 +1061,7 @@ function showSection(sectionId) {
       uploadMessage.className = "message";
     }
 
-    // Ocultar vista previa y limpiar datos de la foto anterior
+    // Ocultar y limpiar vista previa de la foto anterior
     if (uploadPreview) {
       uploadPreview.classList.add("hidden");
     }
@@ -1078,23 +1081,30 @@ function showSection(sectionId) {
     if (aiDeepScoreSpan) aiDeepScoreSpan.textContent = "–";
     if (aiDeepExplanationP) aiDeepExplanationP.textContent = "";
 
-    // Ocultar selector de Bachillerato por defecto
+    // Ocultar selector de modalidad de Bachillerato por defecto
     if (bachWrapper) bachWrapper.style.display = "none";
 
-    // Aplicar de nuevo la config (centros, etc.)
-    applyConfigToUpload();
+    // Volver a aplicar configuración (centros, etc.)
+    if (typeof applyConfigToUpload === "function") {
+      applyConfigToUpload();
+    }
   }
 
-  if (sectionId === "expert") {
+  if (sectionId === "expert" && expertSection) {
     expertSection.classList.remove("hidden");
   }
 
-  if (sectionId === "admin") {
+  if (sectionId === "admin" && adminSection) {
     adminSection.classList.remove("hidden");
-    applyConfigToAdmin();
-    updateAdminSummary();
+    if (typeof applyConfigToAdmin === "function") {
+      applyConfigToAdmin();
+    }
+    if (typeof updateAdminSummary === "function") {
+      updateAdminSummary();
+    }
   }
 }
+
 
 // ----- LOGIN / ACCESO POR ROL -----
 document.getElementById("login-button").addEventListener("click", () => {
@@ -1142,274 +1152,294 @@ const aiLocalScoreSpan = document.getElementById("ai-local-score");
 const aiDeepScoreSpan = document.getElementById("ai-deep-score");
 const aiDeepExplanationP = document.getElementById("ai-deep-explanation");
 
-uploadForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  uploadMessage.textContent = "";
-  uploadMessage.className = "message";
+if (uploadForm) {
+  uploadForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    uploadMessage.textContent = "";
+    uploadMessage.className = "message";
 
-  // --- Recoger campos ---
-  const fileInput = document.getElementById("photo-file");
-  const ageInput = document.getElementById("age");
-  const ageRaw = ageInput.value.trim();
-  const gender = document.getElementById("gender").value;
-  const studies = document.getElementById("studies").value;
-  const bachType = document.getElementById("bach-type").value || "";
-  const vocation = document.getElementById("vocation").value.trim();
-  const studiesFather = document.getElementById("studies-father").value;
-  const studiesMother = document.getElementById("studies-mother").value;
+    // --- Recogida de campos ---
+    const fileInput = document.getElementById("photo-file");
 
-  const rep = document.querySelector('input[name="rep"]:checked')?.value || "";
-  const fail = document.querySelector('input[name="fail"]:checked')?.value || "";
+    const ageInput = document.getElementById("age");
+    const genderSelect = document.getElementById("gender");
+    const studiesSelectEl = document.getElementById("studies");
+    const bachTypeInput = document.getElementById("bach-type");
+    const vocationInput = document.getElementById("vocation");
+    const studiesFatherSelect = document.getElementById("studies-father");
+    const studiesMotherSelect = document.getElementById("studies-mother");
 
-  const pcsHomeInput = document.getElementById("pcs-home");
-  const pcsHomeRaw = pcsHomeInput.value.trim();
+    const pcsHomeInput = document.getElementById("pcs-home");
+    const pcFreqSelect = document.getElementById("pc-frequency");
+    const pcHoursInput = document.getElementById("pc-hours");
 
-  const pcRoom = document.querySelector('input[name="pc-room"]:checked')?.value || "";
-  const pcFrequency = document.getElementById("pc-frequency").value;
+    const privacyOk = document.getElementById("privacy-ok");
 
-  const pcHoursInput = document.getElementById("pc-hours");
-  const pcHoursRaw = pcHoursInput.value.trim();
+    const ageRaw = (ageInput?.value || "").trim();
+    const gender = genderSelect?.value || "";
+    const studies = studiesSelectEl?.value || "";
+    const bachType = bachTypeInput?.value || "";
+    const vocation = (vocationInput?.value || "").trim();
+    const studiesFather = studiesFatherSelect?.value || "";
+    const studiesMother = studiesMotherSelect?.value || "";
 
-  const center = centerSelect ? centerSelect.value.trim() : "";
-  const privacyOk = document.getElementById("privacy-ok");
+    const rep = document.querySelector('input[name="rep"]:checked')?.value || "";
+    const fail = document.querySelector('input[name="fail"]:checked')?.value || "";
 
-  // --- Validaciones campo a campo con mensaje claro ---
+    const pcsHomeRaw = (pcsHomeInput?.value || "").trim();
+    const pcRoom = document.querySelector('input[name="pc-room"]:checked')?.value || "";
+    const pcFrequency = pcFreqSelect?.value || "";
+    const pcHoursRaw = (pcHoursInput?.value || "").trim();
 
-  if (!fileInput.files || !fileInput.files[0]) {
-    uploadMessage.textContent = "Debes seleccionar una fotografía (archivo JPG).";
-    uploadMessage.classList.add("error");
-    return;
-  }
+    const center = centerSelect ? centerSelect.value.trim() : "";
 
-  if (!ageRaw) {
-    uploadMessage.textContent = "Debes indicar tu edad.";
-    uploadMessage.classList.add("error");
-    return;
-  }
-  const ageValue = Number(ageRaw);
-  if (!Number.isFinite(ageValue) || ageValue < 10 || ageValue > 100) {
-    uploadMessage.textContent = "Introduce una edad válida entre 10 y 100 años.";
-    uploadMessage.classList.add("error");
-    return;
-  }
+    // --- Validaciones con mensajes claros ---
 
-  if (!gender) {
-    uploadMessage.textContent = "Debes indicar tu sexo.";
-    uploadMessage.classList.add("error");
-    return;
-  }
-
-  if (!studies) {
-    uploadMessage.textContent = "Debes indicar tus estudios actuales.";
-    uploadMessage.classList.add("error");
-    return;
-  }
-
-  if (studies === "Bachillerato" && !bachType) {
-    uploadMessage.textContent = "Debes indicar la modalidad de Bachillerato.";
-    uploadMessage.classList.add("error");
-    return;
-  }
-
-  if (!studiesFather) {
-    uploadMessage.textContent = "Debes indicar los estudios de tu padre.";
-    uploadMessage.classList.add("error");
-    return;
-  }
-
-  if (!studiesMother) {
-    uploadMessage.textContent = "Debes indicar los estudios de tu madre.";
-    uploadMessage.classList.add("error");
-    return;
-  }
-
-  if (!rep) {
-    uploadMessage.textContent = "Debes indicar si has repetido curso alguna vez.";
-    uploadMessage.classList.add("error");
-    return;
-  }
-
-  if (!fail) {
-    uploadMessage.textContent = "Debes indicar si has suspendido alguna vez una asignatura.";
-    uploadMessage.classList.add("error");
-    return;
-  }
-
-  if (!pcsHomeRaw) {
-    uploadMessage.textContent = "Debes indicar cuántos ordenadores hay en tu casa.";
-    uploadMessage.classList.add("error");
-    return;
-  }
-  const pcsHome = Number(pcsHomeRaw);
-  if (!Number.isFinite(pcsHome) || pcsHome < 0) {
-    uploadMessage.textContent = "Introduce un número válido de ordenadores (0 o más).";
-    uploadMessage.classList.add("error");
-    return;
-  }
-
-  if (!pcRoom) {
-    uploadMessage.textContent = "Debes indicar si tienes ordenador en tu habitación.";
-    uploadMessage.classList.add("error");
-    return;
-  }
-
-  if (!pcFrequency) {
-    uploadMessage.textContent = "Debes indicar con qué frecuencia utilizas el ordenador.";
-    uploadMessage.classList.add("error");
-    return;
-  }
-
-  if (!pcHoursRaw) {
-    uploadMessage.textContent = "Debes indicar cuántas horas al día usas el ordenador.";
-    uploadMessage.classList.add("error");
-    return;
-  }
-  const pcHours = Number(pcHoursRaw);
-  if (!Number.isFinite(pcHours) || pcHours < 0 || pcHours > 24) {
-    uploadMessage.textContent = "Introduce un número de horas válido (entre 0 y 24).";
-    uploadMessage.classList.add("error");
-    return;
-  }
-
-  if (globalConfig.askCenter && !center) {
-    uploadMessage.textContent = "Debes seleccionar tu centro educativo.";
-    uploadMessage.classList.add("error");
-    return;
-  }
-
-  if (!privacyOk || !privacyOk.checked) {
-    uploadMessage.textContent = "Debes aceptar la política de privacidad para continuar.";
-    uploadMessage.classList.add("error");
-    return;
-  }
-
-  // --- Si todo está correcto, seguimos como antes ---
-  const file = fileInput.files[0];
-
-  uploadMessage.textContent = "Procesando fotografía...";
-  uploadMessage.className = "message";
-
-  try {
-    const dataUrl = await resizeImage(file, 1920, 1920, 0.7);
-
-    if (dataUrl.length > 950000) {
-      uploadMessage.textContent =
-        "La fotografía sigue siendo demasiado pesada incluso tras comprimirla. Prueba con una imagen más pequeña.";
+    if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+      uploadMessage.textContent = "Debes seleccionar una fotografía (archivo JPG).";
       uploadMessage.classList.add("error");
       return;
     }
 
-    // IA ligera
-    let aiFeatures = null;
-    let aiScore = null;
+    if (!ageRaw) {
+      uploadMessage.textContent = "Debes indicar tu edad.";
+      uploadMessage.classList.add("error");
+      return;
+    }
+    const ageValue = Number(ageRaw);
+    if (!Number.isFinite(ageValue) || ageValue < 10 || ageValue > 100) {
+      uploadMessage.textContent = "Introduce una edad válida entre 10 y 100 años.";
+      uploadMessage.classList.add("error");
+      return;
+    }
+
+    if (!gender) {
+      uploadMessage.textContent = "Debes indicar tu sexo.";
+      uploadMessage.classList.add("error");
+      return;
+    }
+
+    if (!studies) {
+      uploadMessage.textContent = "Debes indicar tus estudios actuales.";
+      uploadMessage.classList.add("error");
+      return;
+    }
+
+    if (studies === "Bachillerato" && !bachType) {
+      uploadMessage.textContent = "Debes indicar la modalidad de Bachillerato.";
+      uploadMessage.classList.add("error");
+      return;
+    }
+
+    if (!studiesFather) {
+      uploadMessage.textContent = "Debes indicar los estudios de tu padre.";
+      uploadMessage.classList.add("error");
+      return;
+    }
+
+    if (!studiesMother) {
+      uploadMessage.textContent = "Debes indicar los estudios de tu madre.";
+      uploadMessage.classList.add("error");
+      return;
+    }
+
+    if (!rep) {
+      uploadMessage.textContent = "Debes indicar si has repetido curso alguna vez.";
+      uploadMessage.classList.add("error");
+      return;
+    }
+
+    if (!fail) {
+      uploadMessage.textContent = "Debes indicar si has suspendido alguna vez una asignatura.";
+      uploadMessage.classList.add("error");
+      return;
+    }
+
+    if (!pcsHomeRaw) {
+      uploadMessage.textContent = "Debes indicar cuántos ordenadores hay en tu casa.";
+      uploadMessage.classList.add("error");
+      return;
+    }
+    const pcsHome = Number(pcsHomeRaw);
+    if (!Number.isFinite(pcsHome) || pcsHome < 0) {
+      uploadMessage.textContent = "Introduce un número válido de ordenadores (0 o más).";
+      uploadMessage.classList.add("error");
+      return;
+    }
+
+    if (!pcRoom) {
+      uploadMessage.textContent = "Debes indicar si tienes ordenador en tu habitación.";
+      uploadMessage.classList.add("error");
+      return;
+    }
+
+    if (!pcFrequency) {
+      uploadMessage.textContent = "Debes indicar con qué frecuencia utilizas el ordenador.";
+      uploadMessage.classList.add("error");
+      return;
+    }
+
+    if (!pcHoursRaw) {
+      uploadMessage.textContent = "Debes indicar cuántas horas al día usas el ordenador.";
+      uploadMessage.classList.add("error");
+      return;
+    }
+    const pcHours = Number(pcHoursRaw);
+    if (!Number.isFinite(pcHours) || pcHours < 0 || pcHours > 24) {
+      uploadMessage.textContent = "Introduce un número de horas válido (entre 0 y 24).";
+      uploadMessage.classList.add("error");
+      return;
+    }
+
+    if (globalConfig.askCenter && !center) {
+      uploadMessage.textContent = "Debes seleccionar tu centro educativo.";
+      uploadMessage.classList.add("error");
+      return;
+    }
+
+    if (!privacyOk || !privacyOk.checked) {
+      uploadMessage.textContent = "Debes aceptar la política de privacidad para continuar.";
+      uploadMessage.classList.add("error");
+      return;
+    }
+
+    // --- Si todo está correcto, continuamos como antes ---
+
+    const file = fileInput.files[0];
+
+    uploadMessage.textContent = "Procesando fotografía...";
+    uploadMessage.className = "message";
+
     try {
-      const aiResult = await computeAiFeaturesFromDataUrl(dataUrl, globalConfig.aiConfig);
-      aiFeatures = aiResult.features;
-      aiScore = aiResult.score;
+      const dataUrl = await resizeImage(file, 1920, 1920, 0.7);
+
+      if (dataUrl.length > 950000) {
+        uploadMessage.textContent =
+          "La fotografía sigue siendo demasiado pesada incluso tras comprimirla. Prueba con una imagen más pequeña.";
+        uploadMessage.classList.add("error");
+        return;
+      }
+
+      // IA ligera
+      let aiFeatures = null;
+      let aiScore = null;
+      try {
+        const aiResult = await computeAiFeaturesFromDataUrl(dataUrl, globalConfig.aiConfig);
+        aiFeatures = aiResult.features;
+        aiScore = aiResult.score;
+      } catch (err) {
+        console.error("Error IA ligera:", err);
+      }
+
+      // IA local avanzada
+      let localAdvanced = null;
+      try {
+        localAdvanced = await computeLocalAdvancedAnalysis(dataUrl);
+      } catch (err) {
+        console.error("Error IA local avanzada:", err);
+        localAdvanced = {
+          thirdsScore: null,
+          horizonScore: null,
+          goldenScore: null,
+          salienceScore: null,
+          localAdvancedScore: null
+        };
+      }
+
+      // IA profunda
+      let deepAI = null;
+      try {
+        deepAI = await computeDeepAI(dataUrl);
+      } catch (err) {
+        console.error("Error IA profunda:", err);
+        deepAI = {
+          deepScore: null,
+          deepExplanation: null
+        };
+      }
+
+      const docRef = await addDoc(photosCol, {
+        dataUrl: dataUrl,
+        age: ageValue,
+        gender: gender,
+        studies: studies,
+        bachType: bachType,
+        vocation: vocation,
+        studiesFather: studiesFather,
+        studiesMother: studiesMother,
+        rep: rep,
+        fail: fail,
+        pcsHome: pcsHome,
+        pcRoom: pcRoom,
+        pcFrequency: pcFrequency,
+        pcHours: pcHours,
+        center: center,
+        aiFeatures: aiFeatures,
+        aiScore: aiScore,
+        localAdvanced: localAdvanced,
+        deepAI: deepAI,
+        createdAt: new Date().toISOString()
+      });
+
+      const photoId = docRef.id;
+
+      uploadMessage.textContent =
+        "Fotografía guardada correctamente en la base de datos. ¡Gracias por tu participación!";
+      uploadMessage.className = "message success";
+
+      if (uploadPreview && previewImage && previewMeta) {
+        uploadPreview.classList.remove("hidden");
+        previewImage.src = dataUrl;
+
+        const aiText = aiScore != null ? ` | AI_PUNTF: ${aiScore}` : "";
+        const localText =
+          localAdvanced?.localAdvancedScore != null ? ` | IA_local: ${localAdvanced.localAdvancedScore}` : "";
+        const deepText = deepAI?.deepScore != null ? ` | IA_profunda: ${deepAI.deepScore}` : "";
+
+        previewMeta.textContent =
+          "ID: " + photoId +
+          " | Edad: " + ageValue +
+          " | Sexo: " + gender +
+          " | Estudios: " + studies +
+          " | Bachillerato: " + (bachType || "N/A") +
+          aiText + localText + deepText;
+      }
+
+      if (uploadAiAnalysis) {
+        uploadAiAnalysis.classList.remove("hidden");
+        if (aiLightScoreSpan) {
+          aiLightScoreSpan.textContent = aiScore != null ? aiScore.toFixed(2) : "–";
+        }
+        if (aiLocalScoreSpan) {
+          aiLocalScoreSpan.textContent =
+            localAdvanced?.localAdvancedScore != null
+              ? localAdvanced.localAdvancedScore.toFixed(2)
+              : "–";
+        }
+        if (aiDeepScoreSpan) {
+          aiDeepScoreSpan.textContent =
+            deepAI?.deepScore != null ? deepAI.deepScore.toFixed(2) : "–";
+        }
+        if (aiDeepExplanationP) {
+          aiDeepExplanationP.textContent = deepAI?.deepExplanation || "";
+        }
+      }
+
+      // Reset para que el siguiente alumno empiece "en blanco"
+      uploadForm.reset();
+      if (bachWrapper) bachWrapper.style.display = "none";
+      if (typeof applyConfigToUpload === "function") {
+        applyConfigToUpload();
+      }
     } catch (err) {
-      console.error("Error IA ligera:", err);
+      console.error("Error al procesar o guardar la fotografía:", err);
+      uploadMessage.textContent =
+        "Ha ocurrido un problema al procesar la fotografía. Es posible que el formato de la imagen no sea compatible en este dispositivo.";
+      uploadMessage.classList.add("error");
     }
+  });
+}
 
-    // IA local avanzada
-    let localAdvanced = null;
-    try {
-      localAdvanced = await computeLocalAdvancedAnalysis(dataUrl);
-    } catch (err) {
-      console.error("Error IA local avanzada:", err);
-      localAdvanced = {
-        thirdsScore: null,
-        horizonScore: null,
-        goldenScore: null,
-        salienceScore: null,
-        localAdvancedScore: null
-      };
-    }
-
-    // IA profunda (microservicio)
-    let deepAI = null;
-    try {
-      deepAI = await computeDeepAI(dataUrl);
-    } catch (err) {
-      console.error("Error IA profunda:", err);
-      deepAI = {
-        deepScore: null,
-        deepExplanation: null
-      };
-    }
-
-    const docRef = await addDoc(photosCol, {
-      dataUrl: dataUrl,
-      age: ageValue,
-      gender: gender,
-      studies: studies,
-      bachType: bachType,
-      vocation: vocation,
-      studiesFather: studiesFather,
-      studiesMother: studiesMother,
-      rep: rep,
-      fail: fail,
-      pcsHome: pcsHome,
-      pcRoom: pcRoom,
-      pcFrequency: pcFrequency,
-      pcHours: pcHours,
-      center: center,
-      aiFeatures: aiFeatures,
-      aiScore: aiScore,
-      localAdvanced: localAdvanced,
-      deepAI: deepAI,
-      createdAt: new Date().toISOString()
-    });
-
-    const photoId = docRef.id;
-
-    uploadMessage.textContent = "Fotografía guardada correctamente en la base de datos. ¡Gracias por tu participación!";
-    uploadMessage.className = "message success";
-
-    uploadPreview.classList.remove("hidden");
-    previewImage.src = dataUrl;
-
-    const aiText = aiScore != null ? ` | AI_PUNTF: ${aiScore}` : "";
-    const localText = localAdvanced?.localAdvancedScore != null ? ` | IA_local: ${localAdvanced.localAdvancedScore}` : "";
-    const deepText = deepAI?.deepScore != null ? ` | IA_profunda: ${deepAI.deepScore}` : "";
-
-    previewMeta.textContent =
-      "ID: " + photoId +
-      " | Edad: " + ageValue +
-      " | Sexo: " + gender +
-      " | Estudios: " + studies +
-      " | Bachillerato: " + (bachType || "N/A") +
-      aiText + localText + deepText;
-
-    if (uploadAiAnalysis) {
-      uploadAiAnalysis.classList.remove("hidden");
-      if (aiLightScoreSpan) {
-        aiLightScoreSpan.textContent = aiScore != null ? aiScore.toFixed(2) : "–";
-      }
-      if (aiLocalScoreSpan) {
-        aiLocalScoreSpan.textContent =
-          localAdvanced?.localAdvancedScore != null
-            ? localAdvanced.localAdvancedScore.toFixed(2)
-            : "–";
-      }
-      if (aiDeepScoreSpan) {
-        aiDeepScoreSpan.textContent =
-          deepAI?.deepScore != null ? deepAI.deepScore.toFixed(2) : "–";
-      }
-      if (aiDeepExplanationP) {
-        aiDeepExplanationP.textContent = deepAI?.deepExplanation || "";
-      }
-    }
-
-    uploadForm.reset();
-    if (bachWrapper) bachWrapper.style.display = "none";
-    applyConfigToUpload();
-  } catch (err) {
-    console.error("Error al procesar o guardar la fotografía:", err);
-    uploadMessage.textContent =
-      "Ha ocurrido un problema al procesar la fotografía. Es posible que el formato de la imagen no sea compatible en este dispositivo.";
-    uploadMessage.classList.add("error");
-  }
-});
 
     const photoId = docRef.id;
 
