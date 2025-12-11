@@ -1,4 +1,4 @@
-// script.js (versión con Firebase + Firestore + IA ligera + claves configurables)
+// script.js (versión con Firebase + Firestore + IA ligera + IA local avanzada + IA profunda)
 
 // ----- IMPORTS DE FIREBASE DESDE CDN -----
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
@@ -61,13 +61,21 @@ const DEFAULT_AUTH_CONFIG = {
   adminPassword: "admin2025"
 };
 
+// NUEVO: configuración por defecto de IA profunda (microservicio externo)
+const DEEP_AI_CONFIG = {
+  enabled: true, // pon false si quieres desactivarla temporalmente
+  endpoint: "https://TU-ENDPOINT-DEEP-AI.com/analyze", // ← CAMBIA ESTA URL
+  timeoutMs: 20000
+};
+
 // Configuración global simple
 let globalConfig = {
   askCenter: false,
   centers: [],
   ratingItems: DEFAULT_RATING_ITEMS,
   aiConfig: DEFAULT_AI_CONFIG,
-  authConfig: DEFAULT_AUTH_CONFIG
+  authConfig: DEFAULT_AUTH_CONFIG,
+  deepAI: DEEP_AI_CONFIG
 };
 
 // ----- GESTIÓN DE SECCIONES -----
@@ -330,6 +338,17 @@ function mergeAuthConfig(dataAuth) {
   return base;
 }
 
+// Merge DeepAI config con defaults
+function mergeDeepAIConfig(dataDeep) {
+  const base = { ...DEEP_AI_CONFIG };
+  if (!dataDeep) return base;
+  if (typeof dataDeep.enabled === "boolean") base.enabled = dataDeep.enabled;
+  if (typeof dataDeep.endpoint === "string") base.endpoint = dataDeep.endpoint;
+  const t = Number(dataDeep.timeoutMs);
+  if (Number.isFinite(t) && t > 0) base.timeoutMs = t;
+  return base;
+}
+
 async function loadGlobalConfig() {
   try {
     const snap = await getDoc(configDocRef);
@@ -347,12 +366,14 @@ async function loadGlobalConfig() {
       }
       globalConfig.aiConfig = mergeAiConfig(data.aiConfig);
       globalConfig.authConfig = mergeAuthConfig(data.authConfig);
+      globalConfig.deepAI = mergeDeepAIConfig(data.deepAI);
     } else {
       globalConfig.askCenter = false;
       globalConfig.centers = [];
       globalConfig.ratingItems = DEFAULT_RATING_ITEMS;
       globalConfig.aiConfig = DEFAULT_AI_CONFIG;
       globalConfig.authConfig = DEFAULT_AUTH_CONFIG;
+      globalConfig.deepAI = DEEP_AI_CONFIG;
     }
   } catch (err) {
     console.error("Error cargando configuración global:", err);
@@ -361,6 +382,7 @@ async function loadGlobalConfig() {
     globalConfig.ratingItems = DEFAULT_RATING_ITEMS;
     globalConfig.aiConfig = DEFAULT_AI_CONFIG;
     globalConfig.authConfig = DEFAULT_AUTH_CONFIG;
+    globalConfig.deepAI = DEEP_AI_CONFIG;
   }
 
   applyConfigToUpload();
@@ -399,6 +421,7 @@ if (askCenterToggle) {
         payload.ratingItems = globalConfig.ratingItems || DEFAULT_RATING_ITEMS;
         payload.aiConfig = globalConfig.aiConfig || DEFAULT_AI_CONFIG;
         payload.authConfig = globalConfig.authConfig || DEFAULT_AUTH_CONFIG;
+        payload.deepAI = globalConfig.deepAI || DEEP_AI_CONFIG;
         await setDoc(configDocRef, payload);
       } else {
         await updateDoc(configDocRef, payload);
@@ -430,6 +453,7 @@ if (saveCentersButton) {
         payload.ratingItems = globalConfig.ratingItems || DEFAULT_RATING_ITEMS;
         payload.aiConfig = globalConfig.aiConfig || DEFAULT_AI_CONFIG;
         payload.authConfig = globalConfig.authConfig || DEFAULT_AUTH_CONFIG;
+        payload.deepAI = globalConfig.deepAI || DEEP_AI_CONFIG;
         await setDoc(configDocRef, payload);
       } else {
         await updateDoc(configDocRef, payload);
@@ -472,6 +496,7 @@ if (saveRatingItemsButton) {
         payload.centers = globalConfig.centers || [];
         payload.aiConfig = globalConfig.aiConfig || DEFAULT_AI_CONFIG;
         payload.authConfig = globalConfig.authConfig || DEFAULT_AUTH_CONFIG;
+        payload.deepAI = globalConfig.deepAI || DEEP_AI_CONFIG;
         await setDoc(configDocRef, payload);
       } else {
         await updateDoc(configDocRef, payload);
@@ -519,6 +544,7 @@ if (saveAiConfigButton) {
         payload.centers = globalConfig.centers || [];
         payload.ratingItems = globalConfig.ratingItems || DEFAULT_RATING_ITEMS;
         payload.authConfig = globalConfig.authConfig || DEFAULT_AUTH_CONFIG;
+        payload.deepAI = globalConfig.deepAI || DEEP_AI_CONFIG;
         await setDoc(configDocRef, payload);
       } else {
         await updateDoc(configDocRef, payload);
@@ -552,6 +578,7 @@ if (savePasswordsButton) {
         payload.centers = globalConfig.centers || [];
         payload.ratingItems = globalConfig.ratingItems || DEFAULT_RATING_ITEMS;
         payload.aiConfig = globalConfig.aiConfig || DEFAULT_AI_CONFIG;
+        payload.deepAI = globalConfig.deepAI || DEEP_AI_CONFIG;
         await setDoc(configDocRef, payload);
       } else {
         await updateDoc(configDocRef, payload);
@@ -816,13 +843,256 @@ function computeAiFeaturesFromDataUrl(dataUrl, aiConfig) {
   });
 }
 
+// ================================================
+// IA local avanzada: análisis compositivo (tercios, horizonte, φ…)
+// ================================================
+async function computeLocalAdvancedAnalysis(dataUrl) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const W = img.width;
+        const H = img.height;
+
+        const canvas = document.createElement("canvas");
+        canvas.width = W;
+        canvas.height = H;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+
+        const pix = ctx.getImageData(0, 0, W, H).data;
+
+        // ---- 1. Centro visual aproximado (contraste local) ----
+        let cx = 0, cy = 0, totalWeight = 0;
+        for (let y = 1; y < H - 1; y += 4) {
+          for (let x = 1; x < W - 1; x += 4) {
+            const idx = (y * W + x) * 4;
+            const r = pix[idx], g = pix[idx + 1], b = pix[idx + 2];
+            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+
+            const idxR = (y * W + (x + 1)) * 4;
+            const r2 = pix[idxR], g2 = pix[idxR + 1], b2 = pix[idxR + 2];
+            const lum2 = 0.299 * r2 + 0.587 * g2 + 0.114 * b2;
+
+            const diff = Math.abs(lum - lum2);
+
+            cx += x * diff;
+            cy += y * diff;
+            totalWeight += diff;
+          }
+        }
+
+        let centerX = W / 2;
+        let centerY = H / 2;
+        if (totalWeight > 0) {
+          centerX = cx / totalWeight;
+          centerY = cy / totalWeight;
+        }
+
+        // ---- 2. Regla de los tercios ----
+        const tX1 = W / 3, tX2 = (2 * W) / 3;
+        const tY1 = H / 3, tY2 = (2 * H) / 3;
+        const maxDiag = Math.sqrt(W * W + H * H);
+
+        function dist(x1, y1, x2, y2) {
+          return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
+        }
+
+        const d1 = dist(centerX, centerY, tX1, tY1);
+        const d2 = dist(centerX, centerY, tX2, tY1);
+        const d3 = dist(centerX, centerY, tX1, tY2);
+        const d4 = dist(centerX, centerY, tX2, tY2);
+        const minD = Math.min(d1, d2, d3, d4);
+        const thirdsScore01 = 1 - clamp01((minD / maxDiag) * 2.5);
+
+        // ---- 3. Horizonte (borde horizontal fuerte) ----
+        let bestY = 0;
+        let bestStrength = 0;
+
+        for (let y = 1; y < H - 1; y += 2) {
+          let rowDiff = 0;
+          for (let x = 1; x < W - 1; x += 4) {
+            const idx = (y * W + x) * 4;
+            const lum = 0.299 * pix[idx] + 0.587 * pix[idx + 1] + 0.114 * pix[idx + 2];
+
+            const idxD = ((y + 1) * W + x) * 4;
+            const lumD = 0.299 * pix[idxD] + 0.587 * pix[idxD + 1] + 0.114 * pix[idxD + 2];
+
+            rowDiff += Math.abs(lum - lumD);
+          }
+          if (rowDiff > bestStrength) {
+            bestStrength = rowDiff;
+            bestY = y;
+          }
+        }
+
+        const idealH1 = H / 3;
+        const idealH2 = (2 * H) / 3;
+        const dH = Math.min(Math.abs(bestY - idealH1), Math.abs(bestY - idealH2));
+        const horizonScore01 = 1 - clamp01((dH / H) * 1.8);
+
+        // ---- 4. Proporción áurea (φ) ----
+        const phi = 0.618;
+        const gx = W * phi;
+        const gy = H * phi;
+        const dG = dist(centerX, centerY, gx, gy);
+        const goldenScore01 = 1 - clamp01((dG / maxDiag) * 3.2);
+
+        // ---- 5. Saliencia básica por gradiente ----
+        let salSum = 0;
+        let salCount = 0;
+        for (let y = 1; y < H - 1; y += 3) {
+          for (let x = 1; x < W - 1; x += 3) {
+            const idx = (y * W + x) * 4;
+            const lumC = 0.299 * pix[idx] + 0.587 * pix[idx + 1] + 0.114 * pix[idx + 2];
+
+            const idxR = (y * W + (x + 1)) * 4;
+            const idxD = ((y + 1) * W + x) * 4;
+            const lumR = 0.299 * pix[idxR] + 0.587 * pix[idxR + 1] + 0.114 * pix[idxR + 2];
+            const lumD = 0.299 * pix[idxD] + 0.587 * pix[idxD + 1] + 0.114 * pix[idxD + 2];
+
+            const grad = Math.abs(lumC - lumR) + Math.abs(lumC - lumD);
+            salSum += grad;
+            salCount++;
+          }
+        }
+        const salRaw = salCount > 0 ? salSum / salCount : 0;
+        const salienceScore01 = clamp01(salRaw / 50);
+
+        const final01 =
+          0.35 * thirdsScore01 +
+          0.25 * horizonScore01 +
+          0.20 * goldenScore01 +
+          0.20 * salienceScore01;
+
+        const localAdvancedScore = +(clamp01(final01) * 10).toFixed(2);
+
+        resolve({
+          thirdsScore: +(thirdsScore01 * 10).toFixed(2),
+          horizonScore: +(horizonScore01 * 10).toFixed(2),
+          goldenScore: +(goldenScore01 * 10).toFixed(2),
+          salienceScore: +(salienceScore01 * 10).toFixed(2),
+          localAdvancedScore
+        });
+      } catch (err) {
+        console.error("Error IA local avanzada:", err);
+        resolve({
+          thirdsScore: null,
+          horizonScore: null,
+          goldenScore: null,
+          salienceScore: null,
+          localAdvancedScore: null
+        });
+      }
+    };
+
+    img.onerror = () => {
+      console.error("Error cargando imagen para IA avanzada.");
+      resolve({
+        thirdsScore: null,
+        horizonScore: null,
+        goldenScore: null,
+        salienceScore: null,
+        localAdvancedScore: null
+      });
+    };
+
+    img.src = dataUrl;
+  });
+}
+
+// ================================================
+// IA profunda — microservicio externo
+// ================================================
+async function computeDeepAI(dataUrl) {
+  const cfg = globalConfig.deepAI || DEEP_AI_CONFIG;
+  if (!cfg.enabled || !cfg.endpoint) {
+    return { deepScore: null, deepExplanation: null };
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), cfg.timeoutMs || 20000);
+
+    const res = await fetch(cfg.endpoint, {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json" },
+      // Adapta la clave "imageBase64" al contrato real de tu microservicio
+      body: JSON.stringify({ imageBase64: dataUrl })
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      console.warn("Deep AI: respuesta HTTP no OK:", res.status);
+      return { deepScore: null, deepExplanation: null };
+    }
+
+    const json = await res.json();
+    return {
+      deepScore: json.score ?? null,
+      deepExplanation: json.explanation ?? null
+    };
+  } catch (err) {
+    console.error("Error llamando a Deep AI:", err);
+    return { deepScore: null, deepExplanation: null };
+  }
+}
+
+// --------------------------------------------------------------
+// GESTIÓN DE SECCIONES Y LOGIN
+// --------------------------------------------------------------
 function showSection(sectionId) {
   [uploadSection, expertSection, adminSection].forEach(sec => sec.classList.add("hidden"));
-  if (sectionId === "upload") uploadSection.classList.remove("hidden");
-  if (sectionId === "expert") expertSection.classList.remove("hidden");
+
+  if (sectionId === "upload") {
+    uploadSection.classList.remove("hidden");
+
+    // Limpiar formulario y mensajes
+    if (uploadForm) {
+      uploadForm.reset();
+    }
+    if (uploadMessage) {
+      uploadMessage.textContent = "";
+      uploadMessage.className = "message";
+    }
+
+    // Ocultar vista previa y limpiar datos de la foto anterior
+    if (uploadPreview) {
+      uploadPreview.classList.add("hidden");
+    }
+    if (previewImage) {
+      previewImage.src = "";
+    }
+    if (previewMeta) {
+      previewMeta.textContent = "";
+    }
+
+    // Ocultar y resetear bloque de análisis automático
+    if (uploadAiAnalysis) {
+      uploadAiAnalysis.classList.add("hidden");
+    }
+    if (aiLightScoreSpan) aiLightScoreSpan.textContent = "–";
+    if (aiLocalScoreSpan) aiLocalScoreSpan.textContent = "–";
+    if (aiDeepScoreSpan) aiDeepScoreSpan.textContent = "–";
+    if (aiDeepExplanationP) aiDeepExplanationP.textContent = "";
+
+    // Ocultar selector de Bachillerato por defecto
+    if (bachWrapper) bachWrapper.style.display = "none";
+
+    // Aplicar de nuevo la config (centros, etc.)
+    applyConfigToUpload();
+  }
+
+  if (sectionId === "expert") {
+    expertSection.classList.remove("hidden");
+  }
+
   if (sectionId === "admin") {
     adminSection.classList.remove("hidden");
     applyConfigToAdmin();
+    updateAdminSummary();
   }
 }
 
@@ -855,28 +1125,32 @@ document.getElementById("login-button").addEventListener("click", () => {
     showSection("expert");
   } else if (role === "admin") {
     showSection("admin");
-    updateAdminSummary();
   }
 });
 
-// ----- SUBIDA DE FOTOGRAFÍA (FIRESTORE) -----
+// ----- SUBIDA DE FOTOGRAFÍA (FIRESTORE + IA) -----
 const uploadForm = document.getElementById("upload-form");
 const uploadMessage = document.getElementById("upload-message");
 const uploadPreview = document.getElementById("upload-preview");
 const previewImage = document.getElementById("preview-image");
 const previewMeta = document.getElementById("preview-meta");
 
+// NUEVO: bloques de análisis automático en la vista de subida
+const uploadAiAnalysis = document.getElementById("upload-ai-analysis");
+const aiLightScoreSpan = document.getElementById("ai-light-score");
+const aiLocalScoreSpan = document.getElementById("ai-local-score");
+const aiDeepScoreSpan = document.getElementById("ai-deep-score");
+const aiDeepExplanationP = document.getElementById("ai-deep-explanation");
+
 uploadForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   uploadMessage.textContent = "";
   uploadMessage.className = "message";
 
-  if (!uploadForm.reportValidity()) {
-    return;
-  }
-
+  // --- Recoger campos ---
   const fileInput = document.getElementById("photo-file");
-  const ageValue = Number(document.getElementById("age").value);
+  const ageInput = document.getElementById("age");
+  const ageRaw = ageInput.value.trim();
   const gender = document.getElementById("gender").value;
   const studies = document.getElementById("studies").value;
   const bachType = document.getElementById("bach-type").value || "";
@@ -886,32 +1160,130 @@ uploadForm.addEventListener("submit", async (e) => {
 
   const rep = document.querySelector('input[name="rep"]:checked')?.value || "";
   const fail = document.querySelector('input[name="fail"]:checked')?.value || "";
-  const pcsHome = Number(document.getElementById("pcs-home").value);
+
+  const pcsHomeInput = document.getElementById("pcs-home");
+  const pcsHomeRaw = pcsHomeInput.value.trim();
+
   const pcRoom = document.querySelector('input[name="pc-room"]:checked')?.value || "";
   const pcFrequency = document.getElementById("pc-frequency").value;
-  const pcHours = Number(document.getElementById("pc-hours").value);
-  const center = centerSelect ? centerSelect.value.trim() : "";
 
+  const pcHoursInput = document.getElementById("pc-hours");
+  const pcHoursRaw = pcHoursInput.value.trim();
+
+  const center = centerSelect ? centerSelect.value.trim() : "";
   const privacyOk = document.getElementById("privacy-ok");
 
+  // --- Validaciones campo a campo con mensaje claro ---
+
+  if (!fileInput.files || !fileInput.files[0]) {
+    uploadMessage.textContent = "Debes seleccionar una fotografía (archivo JPG).";
+    uploadMessage.classList.add("error");
+    return;
+  }
+
+  if (!ageRaw) {
+    uploadMessage.textContent = "Debes indicar tu edad.";
+    uploadMessage.classList.add("error");
+    return;
+  }
+  const ageValue = Number(ageRaw);
   if (!Number.isFinite(ageValue) || ageValue < 10 || ageValue > 100) {
     uploadMessage.textContent = "Introduce una edad válida entre 10 y 100 años.";
     uploadMessage.classList.add("error");
     return;
   }
 
+  if (!gender) {
+    uploadMessage.textContent = "Debes indicar tu sexo.";
+    uploadMessage.classList.add("error");
+    return;
+  }
+
+  if (!studies) {
+    uploadMessage.textContent = "Debes indicar tus estudios actuales.";
+    uploadMessage.classList.add("error");
+    return;
+  }
+
+  if (studies === "Bachillerato" && !bachType) {
+    uploadMessage.textContent = "Debes indicar la modalidad de Bachillerato.";
+    uploadMessage.classList.add("error");
+    return;
+  }
+
+  if (!studiesFather) {
+    uploadMessage.textContent = "Debes indicar los estudios de tu padre.";
+    uploadMessage.classList.add("error");
+    return;
+  }
+
+  if (!studiesMother) {
+    uploadMessage.textContent = "Debes indicar los estudios de tu madre.";
+    uploadMessage.classList.add("error");
+    return;
+  }
+
+  if (!rep) {
+    uploadMessage.textContent = "Debes indicar si has repetido curso alguna vez.";
+    uploadMessage.classList.add("error");
+    return;
+  }
+
+  if (!fail) {
+    uploadMessage.textContent = "Debes indicar si has suspendido alguna vez una asignatura.";
+    uploadMessage.classList.add("error");
+    return;
+  }
+
+  if (!pcsHomeRaw) {
+    uploadMessage.textContent = "Debes indicar cuántos ordenadores hay en tu casa.";
+    uploadMessage.classList.add("error");
+    return;
+  }
+  const pcsHome = Number(pcsHomeRaw);
+  if (!Number.isFinite(pcsHome) || pcsHome < 0) {
+    uploadMessage.textContent = "Introduce un número válido de ordenadores (0 o más).";
+    uploadMessage.classList.add("error");
+    return;
+  }
+
+  if (!pcRoom) {
+    uploadMessage.textContent = "Debes indicar si tienes ordenador en tu habitación.";
+    uploadMessage.classList.add("error");
+    return;
+  }
+
+  if (!pcFrequency) {
+    uploadMessage.textContent = "Debes indicar con qué frecuencia utilizas el ordenador.";
+    uploadMessage.classList.add("error");
+    return;
+  }
+
+  if (!pcHoursRaw) {
+    uploadMessage.textContent = "Debes indicar cuántas horas al día usas el ordenador.";
+    uploadMessage.classList.add("error");
+    return;
+  }
+  const pcHours = Number(pcHoursRaw);
+  if (!Number.isFinite(pcHours) || pcHours < 0 || pcHours > 24) {
+    uploadMessage.textContent = "Introduce un número de horas válido (entre 0 y 24).";
+    uploadMessage.classList.add("error");
+    return;
+  }
+
+  if (globalConfig.askCenter && !center) {
+    uploadMessage.textContent = "Debes seleccionar tu centro educativo.";
+    uploadMessage.classList.add("error");
+    return;
+  }
+
   if (!privacyOk || !privacyOk.checked) {
-    uploadMessage.textContent = "Debes aceptar la política de privacidad.";
+    uploadMessage.textContent = "Debes aceptar la política de privacidad para continuar.";
     uploadMessage.classList.add("error");
     return;
   }
 
-  if (!fileInput.files || !fileInput.files[0]) {
-    uploadMessage.textContent = "Debes seleccionar una fotografía.";
-    uploadMessage.classList.add("error");
-    return;
-  }
-
+  // --- Si todo está correcto, seguimos como antes ---
   const file = fileInput.files[0];
 
   uploadMessage.textContent = "Procesando fotografía...";
@@ -927,7 +1299,7 @@ uploadForm.addEventListener("submit", async (e) => {
       return;
     }
 
-    // IA ligera: cálculo de parámetros y score
+    // IA ligera
     let aiFeatures = null;
     let aiScore = null;
     try {
@@ -936,6 +1308,33 @@ uploadForm.addEventListener("submit", async (e) => {
       aiScore = aiResult.score;
     } catch (err) {
       console.error("Error IA ligera:", err);
+    }
+
+    // IA local avanzada
+    let localAdvanced = null;
+    try {
+      localAdvanced = await computeLocalAdvancedAnalysis(dataUrl);
+    } catch (err) {
+      console.error("Error IA local avanzada:", err);
+      localAdvanced = {
+        thirdsScore: null,
+        horizonScore: null,
+        goldenScore: null,
+        salienceScore: null,
+        localAdvancedScore: null
+      };
+    }
+
+    // IA profunda (microservicio)
+    let deepAI = null;
+    try {
+      deepAI = await computeDeepAI(dataUrl);
+    } catch (err) {
+      console.error("Error IA profunda:", err);
+      deepAI = {
+        deepScore: null,
+        deepExplanation: null
+      };
     }
 
     const docRef = await addDoc(photosCol, {
@@ -956,6 +1355,8 @@ uploadForm.addEventListener("submit", async (e) => {
       center: center,
       aiFeatures: aiFeatures,
       aiScore: aiScore,
+      localAdvanced: localAdvanced,
+      deepAI: deepAI,
       createdAt: new Date().toISOString()
     });
 
@@ -966,14 +1367,89 @@ uploadForm.addEventListener("submit", async (e) => {
 
     uploadPreview.classList.remove("hidden");
     previewImage.src = dataUrl;
+
     const aiText = aiScore != null ? ` | AI_PUNTF: ${aiScore}` : "";
+    const localText = localAdvanced?.localAdvancedScore != null ? ` | IA_local: ${localAdvanced.localAdvancedScore}` : "";
+    const deepText = deepAI?.deepScore != null ? ` | IA_profunda: ${deepAI.deepScore}` : "";
+
     previewMeta.textContent =
       "ID: " + photoId +
       " | Edad: " + ageValue +
       " | Sexo: " + gender +
       " | Estudios: " + studies +
       " | Bachillerato: " + (bachType || "N/A") +
-      aiText;
+      aiText + localText + deepText;
+
+    if (uploadAiAnalysis) {
+      uploadAiAnalysis.classList.remove("hidden");
+      if (aiLightScoreSpan) {
+        aiLightScoreSpan.textContent = aiScore != null ? aiScore.toFixed(2) : "–";
+      }
+      if (aiLocalScoreSpan) {
+        aiLocalScoreSpan.textContent =
+          localAdvanced?.localAdvancedScore != null
+            ? localAdvanced.localAdvancedScore.toFixed(2)
+            : "–";
+      }
+      if (aiDeepScoreSpan) {
+        aiDeepScoreSpan.textContent =
+          deepAI?.deepScore != null ? deepAI.deepScore.toFixed(2) : "–";
+      }
+      if (aiDeepExplanationP) {
+        aiDeepExplanationP.textContent = deepAI?.deepExplanation || "";
+      }
+    }
+
+    uploadForm.reset();
+    if (bachWrapper) bachWrapper.style.display = "none";
+    applyConfigToUpload();
+  } catch (err) {
+    console.error("Error al procesar o guardar la fotografía:", err);
+    uploadMessage.textContent =
+      "Ha ocurrido un problema al procesar la fotografía. Es posible que el formato de la imagen no sea compatible en este dispositivo.";
+    uploadMessage.classList.add("error");
+  }
+});
+
+    const photoId = docRef.id;
+
+    uploadMessage.textContent = "Fotografía guardada correctamente en la base de datos. ¡Gracias por tu participación!";
+    uploadMessage.className = "message success";
+
+    uploadPreview.classList.remove("hidden");
+    previewImage.src = dataUrl;
+
+    const aiText = aiScore != null ? ` | AI_PUNTF: ${aiScore}` : "";
+    const localText = localAdvanced?.localAdvancedScore != null ? ` | IA_local: ${localAdvanced.localAdvancedScore}` : "";
+    const deepText = deepAI?.deepScore != null ? ` | IA_profunda: ${deepAI.deepScore}` : "";
+
+    previewMeta.textContent =
+      "ID: " + photoId +
+      " | Edad: " + ageValue +
+      " | Sexo: " + gender +
+      " | Estudios: " + studies +
+      " | Bachillerato: " + (bachType || "N/A") +
+      aiText + localText + deepText;
+
+    if (uploadAiAnalysis) {
+      uploadAiAnalysis.classList.remove("hidden");
+      if (aiLightScoreSpan) {
+        aiLightScoreSpan.textContent = aiScore != null ? aiScore.toFixed(2) : "–";
+      }
+      if (aiLocalScoreSpan) {
+        aiLocalScoreSpan.textContent =
+          localAdvanced?.localAdvancedScore != null
+            ? localAdvanced.localAdvancedScore.toFixed(2)
+            : "–";
+      }
+      if (aiDeepScoreSpan) {
+        aiDeepScoreSpan.textContent =
+          deepAI?.deepScore != null ? deepAI.deepScore.toFixed(2) : "–";
+      }
+      if (aiDeepExplanationP) {
+        aiDeepExplanationP.textContent = deepAI?.deepExplanation || "";
+      }
+    }
 
     uploadForm.reset();
     if (bachWrapper) bachWrapper.style.display = "none";
@@ -1044,11 +1520,19 @@ async function loadNextPhotoForExpert() {
     currentPhotoForExpert = photo;
 
     ratingPhoto.src = photo.dataUrl;
-    const aiText = photo.aiScore != null ? ` | AI_PUNTF: ${photo.aiScore}` : "";
+
+    const aiText1 = photo.aiScore != null ? ` | AI_PUNTF: ${photo.aiScore}` : "";
+    const aiText2 = photo.localAdvanced?.localAdvancedScore != null
+      ? ` | IA_local: ${photo.localAdvanced.localAdvancedScore}`
+      : "";
+    const aiText3 = photo.deepAI?.deepScore != null
+      ? ` | IA_profunda: ${photo.deepAI.deepScore}`
+      : "";
+
     ratingPhotoInfo.textContent =
       `ID: ${photo.id} | Edad: ${photo.age} | Sexo: ${photo.gender} | ` +
       `Estudios: ${photo.studies} | Bachillerato: ${photo.bachType || "N/A"}` +
-      aiText;
+      aiText1 + aiText2 + aiText3;
 
     ratingControls.forEach(rc => {
       rc.input.value = 5;
@@ -1237,7 +1721,13 @@ async function loadAllPhotosWithRatings() {
       img.src = p.dataUrl;
       img.alt = "Fotografía " + photoId;
 
-      const aiText = p.aiScore != null ? ` | AI_PUNTF: ${p.aiScore}` : "";
+      const ai1 = p.aiScore != null ? `AI_PUNTF: ${p.aiScore}` : "";
+      const ai2 = p.localAdvanced?.localAdvancedScore != null
+        ? `IA_local: ${p.localAdvanced.localAdvancedScore}`
+        : "";
+      const ai3 = p.deepAI?.deepScore != null
+        ? `IA_profunda: ${p.deepAI.deepScore}`
+        : "";
 
       const meta = document.createElement("p");
       meta.innerHTML = `
@@ -1245,8 +1735,8 @@ async function loadAllPhotosWithRatings() {
         Edad: ${p.age ?? ""} | Sexo: ${p.gender || ""}<br>
         Estudios: ${p.studies || ""} | Bachillerato: ${p.bachType || ""}<br>
         Vocación: ${p.vocation || ""}<br>
-        Estudios padre: ${p.studiesFather || ""} | madre: ${p.studiesMother || ""}<br>
-        Centro: ${p.center || ""}${aiText ? "<br>" + aiText : ""}
+        Centro: ${p.center || ""}<br>
+        ${ai1} ${ai2} ${ai3}
       `;
 
       card.appendChild(img);
@@ -1316,7 +1806,7 @@ if (loadPhotosButton) {
   loadPhotosButton.addEventListener("click", loadAllPhotosWithRatings);
 }
 
-// Exportar CSV dinámico con ítems configurables + IA ligera
+// Exportar CSV dinámico con ítems configurables + IA ligera + IA avanzada + IA profunda
 document.getElementById("export-csv-button").addEventListener("click", async () => {
   try {
     const photosSnap = await getDocs(photosCol);
@@ -1357,6 +1847,13 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
       "ai_colorfulness",
       "ai_edgeDensity",
       "ai_score",
+      "local_thirds",
+      "local_horizon",
+      "local_golden",
+      "local_salience",
+      "local_score",
+      "deep_score",
+      "deep_explanation",
       "expertoId"
     ];
 
@@ -1369,9 +1866,18 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
     const rows = [];
     rows.push(header);
 
-    if (ratingsSnap.empty) {
+    const ratingsArr = ratingsSnap.docs.map(docSnap => ({
+      id: docSnap.id,
+      ...docSnap.data()
+    }));
+
+    if (ratingsArr.length === 0) {
+      // Sin valoraciones: una fila por foto
       Object.entries(photos).forEach(([id, p]) => {
         const f = p.aiFeatures || {};
+        const adv = p.localAdvanced || {};
+        const deep = p.deepAI || {};
+
         const base = [
           id,
           p.gender || "",
@@ -1393,6 +1899,13 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
           f.colorfulness ?? "",
           f.edgeDensity ?? "",
           p.aiScore ?? "",
+          adv.thirdsScore ?? "",
+          adv.horizonScore ?? "",
+          adv.goldenScore ?? "",
+          adv.salienceScore ?? "",
+          adv.localAdvancedScore ?? "",
+          deep.deepScore ?? "",
+          deep.deepExplanation ?? "",
           ""
         ];
 
@@ -1404,12 +1917,14 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
         rows.push(base);
       });
     } else {
-      ratingsSnap.docs.forEach(docSnap => {
-        const r = docSnap.data();
+      // Con valoraciones: una fila por valoración
+      ratingsArr.forEach(r => {
         const p = photos[r.photoId];
         if (!p) return;
 
         const f = p.aiFeatures || {};
+        const adv = p.localAdvanced || {};
+        const deep = p.deepAI || {};
 
         const base = [
           r.photoId,
@@ -1432,6 +1947,13 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
           f.colorfulness ?? "",
           f.edgeDensity ?? "",
           p.aiScore ?? "",
+          adv.thirdsScore ?? "",
+          adv.horizonScore ?? "",
+          adv.goldenScore ?? "",
+          adv.salienceScore ?? "",
+          adv.localAdvancedScore ?? "",
+          deep.deepScore ?? "",
+          deep.deepExplanation ?? "",
           r.expertId || ""
         ];
 
@@ -1476,3 +1998,4 @@ document.getElementById("export-csv-button").addEventListener("click", async () 
     alert("Ha ocurrido un error al generar el CSV.");
   }
 });
+

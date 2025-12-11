@@ -178,10 +178,20 @@
       </form>
 
       <div id="upload-message" class="message"></div>
+
       <div id="upload-preview" class="preview hidden">
         <h3>Vista previa de tu fotografía</h3>
         <img id="preview-image" alt="Vista previa">
         <p id="preview-meta"></p>
+      </div>
+
+      <!-- Bloque de análisis automático de creatividad -->
+      <div id="upload-ai-analysis" class="ai-analysis hidden">
+        <h3>Análisis automático de creatividad</h3>
+        <p><strong>IA ligera (AI_PUNTF):</strong> <span id="ai-light-score">–</span></p>
+        <p><strong>IA local avanzada (composición):</strong> <span id="ai-local-score">–</span></p>
+        <p><strong>IA profunda (modelo externo):</strong> <span id="ai-deep-score">–</span></p>
+        <p id="ai-deep-explanation" class="note"></p>
       </div>
     </section>
 
@@ -376,7 +386,7 @@
     <p>Plataforma experimental de evaluación de creatividad digital en contextos educativos.</p>
   </footer>
 
-  <!-- Importamos script.js como módulo ES6 -->
+  <!-- script principal como módulo ES6 -->
   <script type="module" src="script.js"></script>
 </body>
 </html>

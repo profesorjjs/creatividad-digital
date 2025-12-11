@@ -322,3 +322,22 @@ button.secondary:hover {
 .center-cell {
   text-align: center;
 }
+
+/* ----- Bloque de análisis automático de creatividad ----- */
+
+.ai-analysis {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 10px;
+  background: #f0f2ff;
+  border-left: 4px solid #3f51b5;
+  font-size: 0.9rem;
+}
+
+.ai-analysis p {
+  margin: 0.25rem 0;
+}
+
+.ai-analysis h3 {
+  margin-top: 0;
+}
