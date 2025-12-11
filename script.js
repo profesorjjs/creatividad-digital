@@ -5,7 +5,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebas
 import {
   getFirestore,
   collection,
- addDoc,
+  addDoc,
   getDocs,
   query,
   where,
@@ -223,7 +223,6 @@ function applyConfigToAdmin() {
     ratingItemsTextarea.value = (globalConfig.ratingItems || []).map(i => i.label).join("\n");
   }
 
-  // Claves de acceso
   const auth = globalConfig.authConfig || DEFAULT_AUTH_CONFIG;
   if (uploaderPasswordInput) {
     uploaderPasswordInput.value = auth.uploaderPassword || "";
@@ -831,129 +830,277 @@ function computeAiFeaturesFromDataUrl(dataUrl, aiConfig) {
 }
 
 // ================================================
-// IA local avanzada: análisis compositivo
+// IA local avanzada: análisis compositivo mejorado
 // ================================================
 async function computeLocalAdvancedAnalysis(dataUrl) {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
       try {
-        const W = img.width;
-        const H = img.height;
+        // 1. Reescalado razonable para rendimiento
+        const maxSide = 400;
+        let W = img.width;
+        let H = img.height;
+        const scale = Math.min(maxSide / W, maxSide / H, 1);
+        W = Math.max(1, Math.round(W * scale));
+        H = Math.max(1, Math.round(H * scale));
 
         const canvas = document.createElement("canvas");
         canvas.width = W;
         canvas.height = H;
         const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0);
+        ctx.drawImage(img, 0, 0, W, H);
 
-        const pix = ctx.getImageData(0, 0, W, H).data;
+        const imageData = ctx.getImageData(0, 0, W, H);
+        const data = imageData.data;
+        const N = W * H;
 
-        let cx = 0, cy = 0, totalWeight = 0;
-        for (let y = 1; y < H - 1; y += 4) {
-          for (let x = 1; x < W - 1; x += 4) {
-            const idx = (y * W + x) * 4;
-            const r = pix[idx], g = pix[idx + 1], b = pix[idx + 2];
-            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        // 2. Luminancia normalizada [0,1] + estadísticas básicas
+        const lum = new Float32Array(N);
+        let sumLum = 0;
+        let underCount = 0;
+        let overCount = 0;
 
-            const idxR = (y * W + (x + 1)) * 4;
-            const r2 = pix[idxR], g2 = pix[idxR + 1], b2 = pix[idxR + 2];
-            const lum2 = 0.299 * r2 + 0.587 * g2 + 0.114 * b2;
+        for (let i = 0; i < N; i++) {
+          const r = data[i * 4];
+          const g = data[i * 4 + 1];
+          const b = data[i * 4 + 2];
+          const L = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+          lum[i] = L;
+          sumLum += L;
+          if (L < 0.05) underCount++;
+          if (L > 0.95) overCount++;
+        }
 
-            const diff = Math.abs(lum - lum2);
+        const meanLum = sumLum / N;
+        const underFrac = underCount / N;
+        const overFrac = overCount / N;
 
-            cx += x * diff;
-            cy += y * diff;
-            totalWeight += diff;
+        // 3. Gradientes y mapa de saliencia
+        const gradX = new Float32Array(N);
+        const gradY = new Float32Array(N);
+        const gradMag = new Float32Array(N);
+        const gradAngle = new Float32Array(N);
+
+        for (let y = 1; y < H - 1; y++) {
+          for (let x = 1; x < W - 1; x++) {
+            const i = y * W + x;
+            const gx = lum[i + 1] - lum[i - 1];
+            const gy = lum[i + W] - lum[i - W];
+            gradX[i] = gx;
+            gradY[i] = gy;
+            const mag = Math.sqrt(gx * gx + gy * gy);
+            gradMag[i] = mag;
+            gradAngle[i] = Math.atan2(gy, gx);
+          }
+        }
+
+        let maxMag = 0;
+        for (let i = 0; i < N; i++) {
+          if (gradMag[i] > maxMag) maxMag = gradMag[i];
+        }
+        if (maxMag > 0) {
+          for (let i = 0; i < N; i++) gradMag[i] /= maxMag;
+        }
+
+        // 4. Centro de saliencia
+        let cx = 0, cy = 0, totalW = 0;
+        for (let y = 0; y < H; y += 2) {
+          for (let x = 0; x < W; x += 2) {
+            const i = y * W + x;
+            const w = gradMag[i];
+            cx += x * w;
+            cy += y * w;
+            totalW += w;
           }
         }
 
         let centerX = W / 2;
         let centerY = H / 2;
-        if (totalWeight > 0) {
-          centerX = cx / totalWeight;
-          centerY = cy / totalWeight;
+        if (totalW > 0) {
+          centerX = cx / totalW;
+          centerY = cy / totalW;
         }
 
-        const tX1 = W / 3, tX2 = (2 * W) / 3;
-        const tY1 = H / 3, tY2 = (2 * H) / 3;
-        const maxDiag = Math.sqrt(W * W + H * H);
+        const diag = Math.sqrt(W * W + H * H) || 1;
+
+        // 5. Regla de los tercios
+        const thirdsPoints = [
+          { x: W / 3, y: H / 3 },
+          { x: (2 * W) / 3, y: H / 3 },
+          { x: W / 3, y: (2 * H) / 3 },
+          { x: (2 * W) / 3, y: (2 * H) / 3 }
+        ];
 
         function dist(x1, y1, x2, y2) {
-          return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
+          const dx = x1 - x2;
+          const dy = y1 - y2;
+          return Math.sqrt(dx * dx + dy * dy);
         }
 
-        const d1 = dist(centerX, centerY, tX1, tY1);
-        const d2 = dist(centerX, centerY, tX2, tY1);
-        const d3 = dist(centerX, centerY, tX1, tY2);
-        const d4 = dist(centerX, centerY, tX2, tY2);
-        const minD = Math.min(d1, d2, d3, d4);
-        const thirdsScore01 = 1 - clamp01((minD / maxDiag) * 2.5);
+        let minThirdDist = Infinity;
+        for (const p of thirdsPoints) {
+          const d = dist(centerX, centerY, p.x, p.y);
+          if (d < minThirdDist) minThirdDist = d;
+        }
+        const thirdsScore01 = 1 - clamp01(minThirdDist / (0.5 * diag));
+        const thirdsScore = +(thirdsScore01 * 10).toFixed(2);
 
-        let bestY = 0;
-        let bestStrength = 0;
+        // 6. Horizonte
+        let bestRow = -1;
+        let bestRowStrength = 0;
 
-        for (let y = 1; y < H - 1; y += 2) {
-          let rowDiff = 0;
-          for (let x = 1; x < W - 1; x += 4) {
-            const idx = (y * W + x) * 4;
-            const lum = 0.299 * pix[idx] + 0.587 * pix[idx + 1] + 0.114 * pix[idx + 2];
-
-            const idxD = ((y + 1) * W + x) * 4;
-            const lumD = 0.299 * pix[idxD] + 0.587 * pix[idxD + 1] + 0.114 * pix[idxD + 2];
-
-            rowDiff += Math.abs(lum - lumD);
+        for (let y = 1; y < H - 1; y++) {
+          let rowStrength = 0;
+          for (let x = 1; x < W - 1; x++) {
+            const i = y * W + x;
+            const mag = gradMag[i];
+            if (mag <= 0) continue;
+            const ang = gradAngle[i];
+            const horizComponent = Math.abs(Math.sin(ang)) * mag;
+            rowStrength += horizComponent;
           }
-          if (rowDiff > bestStrength) {
-            bestStrength = rowDiff;
-            bestY = y;
+          if (rowStrength > bestRowStrength) {
+            bestRowStrength = rowStrength;
+            bestRow = y;
           }
         }
 
-        const idealH1 = H / 3;
-        const idealH2 = (2 * H) / 3;
-        const dH = Math.min(Math.abs(bestY - idealH1), Math.abs(bestY - idealH2));
-        const horizonScore01 = 1 - clamp01((dH / H) * 1.8);
+        let horizonScore01 = 0;
+        if (bestRow >= 0) {
+          const yNorm = bestRow / (H - 1);
+          const d = Math.min(Math.abs(yNorm - 1 / 3), Math.abs(yNorm - 2 / 3));
+          horizonScore01 = 1 - clamp01(d / 0.33);
+        }
+        const horizonScore = +(horizonScore01 * 10).toFixed(2);
 
+        // 7. Proporción áurea
         const phi = 0.618;
-        const gx = W * phi;
-        const gy = H * phi;
-        const dG = dist(centerX, centerY, gx, gy);
-        const goldenScore01 = 1 - clamp01((dG / maxDiag) * 3.2);
+        const goldenPoints = [
+          { x: W * phi, y: H * phi },
+          { x: W * (1 - phi), y: H * phi },
+          { x: W * phi, y: H * (1 - phi) },
+          { x: W * (1 - phi), y: H * (1 - phi) }
+        ];
 
-        let salSum = 0;
-        let salCount = 0;
-        for (let y = 1; y < H - 1; y += 3) {
-          for (let x = 1; x < W - 1; x += 3) {
-            const idx = (y * W + x) * 4;
-            const lumC = 0.299 * pix[idx] + 0.587 * pix[idx + 1] + 0.114 * pix[idx + 2];
+        let minGoldenDist = Infinity;
+        for (const p of goldenPoints) {
+          const d = dist(centerX, centerY, p.x, p.y);
+          if (d < minGoldenDist) minGoldenDist = d;
+        }
+        const goldenScore01 = 1 - clamp01(minGoldenDist / (0.5 * diag));
+        const goldenScore = +(goldenScore01 * 10).toFixed(2);
 
-            const idxR = (y * W + (x + 1)) * 4;
-            const idxD = ((y + 1) * W + x) * 4;
-            const lumR = 0.299 * pix[idxR] + 0.587 * pix[idxR + 1] + 0.114 * pix[idxR + 2];
-            const lumD = 0.299 * pix[idxD] + 0.587 * pix[idxD + 1] + 0.114 * pix[idxD + 2];
+        // 8. Saliencia global
+        let sumSal = 0;
+        for (let i = 0; i < N; i++) sumSal += gradMag[i];
+        const salAvg = N > 0 ? sumSal / N : 0;
+        const salienceScore01 = clamp01(salAvg * 2);
+        const salienceScore = +(salienceScore01 * 10).toFixed(2);
 
-            const grad = Math.abs(lumC - lumR) + Math.abs(lumC - lumD);
-            salSum += grad;
-            salCount++;
+        // 9. Nitidez (Laplaciano)
+        let lapSqSum = 0;
+        let lapCount = 0;
+        for (let y = 1; y < H - 1; y++) {
+          for (let x = 1; x < W - 1; x++) {
+            const i = y * W + x;
+            const lap =
+              lum[i - 1] +
+              lum[i + 1] +
+              lum[i - W] +
+              lum[i + W] -
+              4 * lum[i];
+            lapSqSum += lap * lap;
+            lapCount++;
           }
         }
-        const salRaw = salCount > 0 ? salSum / salCount : 0;
-        const salienceScore01 = clamp01(salRaw / 50);
+        let sharpnessScore01 = 0;
+        if (lapCount > 0) {
+          const sharpRaw = Math.sqrt(lapSqSum / lapCount);
+          sharpnessScore01 = clamp01(sharpRaw / 0.5);
+        }
+        const sharpnessScore = +(sharpnessScore01 * 10).toFixed(2);
 
-        const final01 =
-          0.35 * thirdsScore01 +
-          0.25 * horizonScore01 +
-          0.20 * goldenScore01 +
-          0.20 * salienceScore01;
+        // 10. Exposición
+        const extremesFrac = underFrac + overFrac;
+        const extremesScore = 1 - clamp01(extremesFrac / 0.4);
+        const midScore = 1 - Math.abs(meanLum - 0.5) / 0.5;
+        const exposureScore01 = clamp01(0.6 * extremesScore + 0.4 * midScore);
+        const exposureScore = +(exposureScore01 * 10).toFixed(2);
 
-        const localAdvancedScore = +(clamp01(final01) * 10).toFixed(2);
+        // 11. Simetría izquierda/derecha
+        let symDiffSum = 0;
+        let symPairs = 0;
+        const halfW = Math.floor(W / 2);
+
+        for (let y = 0; y < H; y++) {
+          for (let x = 0; x < halfW; x++) {
+            const iL = y * W + x;
+            const iR = y * W + (W - 1 - x);
+            const d = Math.abs(lum[iL] - lum[iR]);
+            symDiffSum += d;
+            symPairs++;
+          }
+        }
+
+        let symmetryScore01 = 0;
+        if (symPairs > 0) {
+          const meanDiff = symDiffSum / symPairs;
+          symmetryScore01 = 1 - clamp01(meanDiff / 0.5);
+        }
+        const symmetryScore = +(symmetryScore01 * 10).toFixed(2);
+
+        // 12. Equilibrio de masa de saliencia
+        let leftMass = 0, rightMass = 0, topMass = 0, bottomMass = 0;
+        for (let y = 0; y < H; y++) {
+          for (let x = 0; x < W; x++) {
+            const i = y * W + x;
+            const s = gradMag[i];
+            if (x < W / 2) leftMass += s;
+            else rightMass += s;
+            if (y < H / 2) topMass += s;
+            else bottomMass += s;
+          }
+        }
+
+        const lrTotal = leftMass + rightMass || 1;
+        const tbTotal = topMass + bottomMass || 1;
+
+        const lrRatio = leftMass / lrTotal;
+        const tbRatio = topMass / tbTotal;
+
+        const lrDev = Math.abs(lrRatio - 0.5) / 0.5;
+        const tbDev = Math.abs(tbRatio - 0.5) / 0.5;
+
+        const lrBalance = 1 - clamp01(lrDev);
+        const tbBalance = 1 - clamp01(tbDev);
+
+        const balanceScore01 = (lrBalance + tbBalance) * 0.5;
+        const balanceScore = +(balanceScore01 * 10).toFixed(2);
+
+        // 13. Puntuación global combinada
+        const localAdvancedScore01 = clamp01(
+          0.20 * thirdsScore01 +
+          0.12 * horizonScore01 +
+          0.12 * goldenScore01 +
+          0.16 * salienceScore01 +
+          0.16 * sharpnessScore01 +
+          0.12 * exposureScore01 +
+          0.06 * symmetryScore01 +
+          0.06 * balanceScore01
+        );
+
+        const localAdvancedScore = +(localAdvancedScore01 * 10).toFixed(2);
 
         resolve({
-          thirdsScore: +(thirdsScore01 * 10).toFixed(2),
-          horizonScore: +(horizonScore01 * 10).toFixed(2),
-          goldenScore: +(goldenScore01 * 10).toFixed(2),
-          salienceScore: +(salienceScore01 * 10).toFixed(2),
+          thirdsScore,
+          horizonScore,
+          goldenScore,
+          salienceScore,
+          sharpnessScore,
+          exposureScore,
+          symmetryScore,
+          balanceScore,
           localAdvancedScore
         });
       } catch (err) {
@@ -963,6 +1110,10 @@ async function computeLocalAdvancedAnalysis(dataUrl) {
           horizonScore: null,
           goldenScore: null,
           salienceScore: null,
+          sharpnessScore: null,
+          exposureScore: null,
+          symmetryScore: null,
+          balanceScore: null,
           localAdvancedScore: null
         });
       }
@@ -975,6 +1126,10 @@ async function computeLocalAdvancedAnalysis(dataUrl) {
         horizonScore: null,
         goldenScore: null,
         salienceScore: null,
+        sharpnessScore: null,
+        exposureScore: null,
+        symmetryScore: null,
+        balanceScore: null,
         localAdvancedScore: null
       });
     };
@@ -1060,9 +1215,7 @@ function showSection(sectionId) {
 
     if (bachWrapper) bachWrapper.style.display = "none";
 
-    if (typeof applyConfigToUpload === "function") {
-      applyConfigToUpload();
-    }
+    applyConfigToUpload();
   }
 
   if (sectionId === "expert" && expertSection) {
@@ -1071,12 +1224,8 @@ function showSection(sectionId) {
 
   if (sectionId === "admin" && adminSection) {
     adminSection.classList.remove("hidden");
-    if (typeof applyConfigToAdmin === "function") {
-      applyConfigToAdmin();
-    }
-    if (typeof updateAdminSummary === "function") {
-      updateAdminSummary();
-    }
+    applyConfigToAdmin();
+    updateAdminSummary();
   }
 }
 
@@ -1176,8 +1325,7 @@ if (uploadForm) {
 
     const center = centerSelect ? centerSelect.value.trim() : "";
 
-    // Validaciones con showUploadError
-
+    // Validaciones
     if (!fileInput || !fileInput.files || !fileInput.files[0]) {
       showUploadError("Debes seleccionar una fotografía (archivo JPG).");
       return;
@@ -1301,6 +1449,10 @@ if (uploadForm) {
           horizonScore: null,
           goldenScore: null,
           salienceScore: null,
+          sharpnessScore: null,
+          exposureScore: null,
+          symmetryScore: null,
+          balanceScore: null,
           localAdvancedScore: null
         };
       }
@@ -1366,28 +1518,57 @@ if (uploadForm) {
       if (uploadAiAnalysis) {
         uploadAiAnalysis.classList.remove("hidden");
         if (aiLightScoreSpan) {
-          aiLightScoreSpan.textContent = aiScore != null ? aiScore.toFixed(2) : "–";
+          aiLightScoreSpan.textContent = (typeof aiScore === "number") ? aiScore.toFixed(2) : "–";
         }
         if (aiLocalScoreSpan) {
           aiLocalScoreSpan.textContent =
-            localAdvanced?.localAdvancedScore != null
+            localAdvanced && typeof localAdvanced.localAdvancedScore === "number"
               ? localAdvanced.localAdvancedScore.toFixed(2)
               : "–";
         }
         if (aiDeepScoreSpan) {
           aiDeepScoreSpan.textContent =
-            deepAI?.deepScore != null ? deepAI.deepScore.toFixed(2) : "–";
+            deepAI && typeof deepAI.deepScore === "number"
+              ? deepAI.deepScore.toFixed(2)
+              : "–";
         }
+
+        // Mini informe textual
+        let resumen = "";
+        if (deepAI && typeof deepAI.deepExplanation === "string" && deepAI.deepExplanation.trim() !== "") {
+          resumen = deepAI.deepExplanation.trim();
+        } else {
+          const partes = [];
+
+          if (typeof aiScore === "number") {
+            partes.push(`Índice visual global (IA ligera): ${aiScore.toFixed(1)}/10.`);
+          }
+
+          if (localAdvanced && typeof localAdvanced.localAdvancedScore === "number") {
+            const la = localAdvanced.localAdvancedScore;
+            let juicio;
+            if (la >= 8) juicio = "muy buena";
+            else if (la >= 6) juicio = "bastante equilibrada";
+            else if (la >= 4) juicio = "mejorable";
+            else juicio = "poco equilibrada";
+            partes.push(`La composición general se valora como ${juicio} (${la.toFixed(1)}/10).`);
+          }
+
+          if (deepAI && typeof deepAI.deepScore === "number") {
+            partes.push(`IA profunda: ${deepAI.deepScore.toFixed(1)}/10.`);
+          }
+
+          resumen = partes.join(" ");
+        }
+
         if (aiDeepExplanationP) {
-          aiDeepExplanationP.textContent = deepAI?.deepExplanation || "";
+          aiDeepExplanationP.textContent = resumen;
         }
       }
 
       uploadForm.reset();
       if (bachWrapper) bachWrapper.style.display = "none";
-      if (typeof applyConfigToUpload === "function") {
-        applyConfigToUpload();
-      }
+      applyConfigToUpload();
     } catch (err) {
       console.error("Error al procesar o guardar la fotografía:", err);
       showUploadError("Ha ocurrido un problema al procesar la fotografía. Es posible que el formato de la imagen no sea compatible en este dispositivo.");
@@ -1747,7 +1928,7 @@ if (loadPhotosButton) {
   loadPhotosButton.addEventListener("click", loadAllPhotosWithRatings);
 }
 
-// Exportar CSV dinámico con ítems configurables + IA ligera + IA avanzada + IA profunda
+// Exportar CSV con una sola puntuación IA (ia_score_final)
 const exportCsvButton = document.getElementById("export-csv-button");
 if (exportCsvButton) {
   exportCsvButton.addEventListener("click", async () => {
@@ -1785,18 +1966,7 @@ if (exportCsvButton) {
         "frecuencia_uso_ordenador",
         "horas_diarias_ordenador",
         "centro_educativo",
-        "ai_brightness",
-        "ai_contrast",
-        "ai_colorfulness",
-        "ai_edgeDensity",
-        "ai_score",
-        "local_thirds",
-        "local_horizon",
-        "local_golden",
-        "local_salience",
-        "local_score",
-        "deep_score",
-        "deep_explanation",
+        "ia_score_final",
         "expertoId"
       ];
 
@@ -1814,11 +1984,23 @@ if (exportCsvButton) {
         ...docSnap.data()
       }));
 
+      function computeIaFinal(p) {
+        if (p.localAdvanced && typeof p.localAdvanced.localAdvancedScore === "number") {
+          return p.localAdvanced.localAdvancedScore;
+        }
+        if (typeof p.aiScore === "number") {
+          return p.aiScore;
+        }
+        if (p.deepAI && typeof p.deepAI.deepScore === "number") {
+          return p.deepAI.deepScore;
+        }
+        return null;
+      }
+
       if (ratingsArr.length === 0) {
+        // Sin valoraciones: una fila por foto
         Object.entries(photos).forEach(([id, p]) => {
-          const f = p.aiFeatures || {};
-          const adv = p.localAdvanced || {};
-          const deep = p.deepAI || {};
+          const iaFinal = computeIaFinal(p);
 
           const base = [
             id,
@@ -1836,18 +2018,7 @@ if (exportCsvButton) {
             p.pcFrequency || "",
             p.pcHours ?? "",
             p.center || "",
-            f.brightness ?? "",
-            f.contrast ?? "",
-            f.colorfulness ?? "",
-            f.edgeDensity ?? "",
-            p.aiScore ?? "",
-            adv.thirdsScore ?? "",
-            adv.horizonScore ?? "",
-            adv.goldenScore ?? "",
-            adv.salienceScore ?? "",
-            adv.localAdvancedScore ?? "",
-            deep.deepScore ?? "",
-            deep.deepExplanation ?? "",
+            iaFinal != null ? iaFinal : "",
             ""
           ];
 
@@ -1859,13 +2030,12 @@ if (exportCsvButton) {
           rows.push(base);
         });
       } else {
+        // Con valoraciones: una fila por valoración
         ratingsArr.forEach(r => {
           const p = photos[r.photoId];
           if (!p) return;
 
-          const f = p.aiFeatures || {};
-          const adv = p.localAdvanced || {};
-          const deep = p.deepAI || {};
+          const iaFinal = computeIaFinal(p);
 
           const base = [
             r.photoId,
@@ -1883,18 +2053,7 @@ if (exportCsvButton) {
             p.pcFrequency || "",
             p.pcHours ?? "",
             p.center || "",
-            f.brightness ?? "",
-            f.contrast ?? "",
-            f.colorfulness ?? "",
-            f.edgeDensity ?? "",
-            p.aiScore ?? "",
-            adv.thirdsScore ?? "",
-            adv.horizonScore ?? "",
-            adv.goldenScore ?? "",
-            adv.salienceScore ?? "",
-            adv.localAdvancedScore ?? "",
-            deep.deepScore ?? "",
-            deep.deepExplanation ?? "",
+            iaFinal != null ? iaFinal : "",
             r.expertId || ""
           ];
 
