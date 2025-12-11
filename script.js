@@ -5,7 +5,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebas
 import {
   getFirestore,
   collection,
-  addDoc,
+ addDoc,
   getDocs,
   query,
   where,
@@ -577,7 +577,7 @@ if (savePasswordsButton) {
         payload.centers = globalConfig.centers || [];
         payload.ratingItems = globalConfig.ratingItems || DEFAULT_RATING_ITEMS;
         payload.aiConfig = globalConfig.aiConfig || DEFAULT_AI_CONFIG;
-        payload.deepAI = globalConfig.deepAI || DEEP_AI_CONFIG;
+        payload.deepAI = globalConfig.deepAI || DEFAULT_DEEP_AI_CONFIG;
         await setDoc(configDocRef, payload);
       } else {
         await updateDoc(configDocRef, payload);
@@ -622,7 +622,7 @@ if (resetDbButton) {
 }
 
 // ================================================
-// Redimensionar y comprimir la imagen (adaptado a móvil)
+// Redimensionar y comprimir la imagen
 // ================================================
 function resizeImage(file, maxWidth = 1920, maxHeight = 1920, quality = 0.7) {
   return new Promise((resolve, reject) => {
@@ -669,7 +669,7 @@ function resizeImage(file, maxWidth = 1920, maxHeight = 1920, quality = 0.7) {
 }
 
 // ================================================
-// IA ligera: análisis simple de la imagen en el cliente
+// IA ligera: análisis simple en cliente
 // ================================================
 function clamp01(x) {
   if (x < 0) return 0;
@@ -687,7 +687,6 @@ function computeAiFeaturesFromDataUrl(dataUrl, aiConfig) {
     const img = new Image();
     img.onload = () => {
       try {
-        // Reducimos la imagen a algo manejable, por ejemplo 256 px de lado mayor
         const maxSide = 256;
         let w = img.width;
         let h = img.height;
@@ -711,7 +710,6 @@ function computeAiFeaturesFromDataUrl(dataUrl, aiConfig) {
 
         const lumArr = new Float32Array(n);
 
-        // 1) Luminancia y colorfulness básica
         for (let i = 0; i < n; i++) {
           const r = data[i * 4] / 255;
           const g = data[i * 4 + 1] / 255;
@@ -730,11 +728,10 @@ function computeAiFeaturesFromDataUrl(dataUrl, aiConfig) {
         const varLum = sumLum2 / n - meanLum * meanLum;
         const stdLum = Math.sqrt(Math.max(varLum, 0));
 
-        const brightnessRaw = meanLum;            // 0–1
-        const contrastRaw = stdLum;               // ~0–0.4
-        const colorfulnessRaw = sumColorDiff / n; // 0–1 aprox
+        const brightnessRaw = meanLum;
+        const contrastRaw = stdLum;
+        const colorfulnessRaw = sumColorDiff / n;
 
-        // 2) Edge density (muy simple, usando gradiente sobre luminancia)
         let edgeSum = 0;
         let edgeCount = 0;
         for (let y = 1; y < h - 1; y++) {
@@ -752,7 +749,7 @@ function computeAiFeaturesFromDataUrl(dataUrl, aiConfig) {
             edgeCount++;
           }
         }
-        const edgeDensityRaw = edgeCount > 0 ? edgeSum / edgeCount : 0; // 0–~0.7
+        const edgeDensityRaw = edgeCount > 0 ? edgeSum / edgeCount : 0;
 
         const features = {
           brightness: brightnessRaw,
@@ -761,25 +758,23 @@ function computeAiFeaturesFromDataUrl(dataUrl, aiConfig) {
           edgeDensity: edgeDensityRaw
         };
 
-        // Normalización heurística (0–1) por parámetro
         function normalizeFeature(name, value) {
           switch (name) {
             case "brightness": {
-              // Evitar fotos demasiado oscuras o quemadas:
               const val = value;
-              const tri = 1 - Math.abs(val - 0.55) / 0.55; // ~1 en 0.55, ~0 en 0 o 1
+              const tri = 1 - Math.abs(val - 0.55) / 0.55;
               return clamp01(tri);
             }
             case "contrast": {
-              const norm = value / 0.30; // contraste interesante ~0.25–0.35
+              const norm = value / 0.30;
               return clamp01(norm);
             }
             case "colorfulness": {
-              const norm = value / 0.35; // colores ricos ~0.3–0.5
+              const norm = value / 0.35;
               return clamp01(norm);
             }
             case "edgeDensity": {
-              const norm = value / 0.25; // complejidad estructural
+              const norm = value / 0.25;
               return clamp01(norm);
             }
             default:
@@ -809,15 +804,12 @@ function computeAiFeaturesFromDataUrl(dataUrl, aiConfig) {
         if (den > 0) {
           const avg01 = num / den;
 
-          // Término de “sinergia”: contraste, color y bordes
           const c = normFeatures.contrast ?? avg01;
           const col = normFeatures.colorfulness ?? avg01;
           const edge = normFeatures.edgeDensity ?? avg01;
           const synergy = clamp01((c * col + col * edge + c * edge) / 3);
 
           const final01 = clamp01(0.7 * avg01 + 0.3 * synergy);
-
-          // Escala 0–10 con dos decimales
           score = +(final01 * 10).toFixed(2);
         }
 
@@ -856,7 +848,6 @@ async function computeLocalAdvancedAnalysis(dataUrl) {
 
         const pix = ctx.getImageData(0, 0, W, H).data;
 
-        // 1. Centro visual aproximado
         let cx = 0, cy = 0, totalWeight = 0;
         for (let y = 1; y < H - 1; y += 4) {
           for (let x = 1; x < W - 1; x += 4) {
@@ -883,7 +874,6 @@ async function computeLocalAdvancedAnalysis(dataUrl) {
           centerY = cy / totalWeight;
         }
 
-        // 2. Regla de los tercios
         const tX1 = W / 3, tX2 = (2 * W) / 3;
         const tY1 = H / 3, tY2 = (2 * H) / 3;
         const maxDiag = Math.sqrt(W * W + H * H);
@@ -899,7 +889,6 @@ async function computeLocalAdvancedAnalysis(dataUrl) {
         const minD = Math.min(d1, d2, d3, d4);
         const thirdsScore01 = 1 - clamp01((minD / maxDiag) * 2.5);
 
-        // 3. Horizonte (borde horizontal fuerte)
         let bestY = 0;
         let bestStrength = 0;
 
@@ -925,14 +914,12 @@ async function computeLocalAdvancedAnalysis(dataUrl) {
         const dH = Math.min(Math.abs(bestY - idealH1), Math.abs(bestY - idealH2));
         const horizonScore01 = 1 - clamp01((dH / H) * 1.8);
 
-        // 4. Proporción áurea
         const phi = 0.618;
         const gx = W * phi;
         const gy = H * phi;
         const dG = dist(centerX, centerY, gx, gy);
         const goldenScore01 = 1 - clamp01((dG / maxDiag) * 3.2);
 
-        // 5. Saliencia básica
         let salSum = 0;
         let salCount = 0;
         for (let y = 1; y < H - 1; y += 3) {
@@ -1012,7 +999,7 @@ async function computeDeepAI(dataUrl) {
       method: "POST",
       signal: controller.signal,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imageBase64: dataUrl }) // adapta la clave al contrato real
+      body: JSON.stringify({ imageBase64: dataUrl })
     });
 
     clearTimeout(timeoutId);
@@ -1037,7 +1024,6 @@ async function computeDeepAI(dataUrl) {
 // GESTIÓN DE SECCIONES Y LOGIN
 // --------------------------------------------------------------
 function showSection(sectionId) {
-  // Ocultar todas las secciones primero
   [uploadSection, expertSection, adminSection].forEach((sec) => {
     if (sec) sec.classList.add("hidden");
   });
@@ -1045,7 +1031,6 @@ function showSection(sectionId) {
   if (sectionId === "upload" && uploadSection) {
     uploadSection.classList.remove("hidden");
 
-    // Limpiar formulario y mensajes
     if (uploadForm) {
       uploadForm.reset();
     }
@@ -1054,7 +1039,6 @@ function showSection(sectionId) {
       uploadMessage.className = "message";
     }
 
-    // Ocultar y limpiar vista previa de la foto anterior
     if (uploadPreview) {
       uploadPreview.classList.add("hidden");
     }
@@ -1065,7 +1049,6 @@ function showSection(sectionId) {
       previewMeta.textContent = "";
     }
 
-    // Ocultar y resetear bloque de análisis automático
     if (uploadAiAnalysis) {
       uploadAiAnalysis.classList.add("hidden");
     }
@@ -1074,10 +1057,8 @@ function showSection(sectionId) {
     if (aiDeepScoreSpan) aiDeepScoreSpan.textContent = "–";
     if (aiDeepExplanationP) aiDeepExplanationP.textContent = "";
 
-    // Ocultar selector de modalidad de Bachillerato por defecto
     if (bachWrapper) bachWrapper.style.display = "none";
 
-    // Volver a aplicar configuración (centros, etc.)
     if (typeof applyConfigToUpload === "function") {
       applyConfigToUpload();
     }
@@ -1140,12 +1121,19 @@ const uploadPreview = document.getElementById("upload-preview");
 const previewImage = document.getElementById("preview-image");
 const previewMeta = document.getElementById("preview-meta");
 
-// Bloques de análisis automático en la vista de subida
 const uploadAiAnalysis = document.getElementById("upload-ai-analysis");
 const aiLightScoreSpan = document.getElementById("ai-light-score");
 const aiLocalScoreSpan = document.getElementById("ai-local-score");
 const aiDeepScoreSpan = document.getElementById("ai-deep-score");
 const aiDeepExplanationP = document.getElementById("ai-deep-explanation");
+
+// Función para mostrar errores de subida y centrar el mensaje (móvil)
+function showUploadError(msg) {
+  if (!uploadMessage) return;
+  uploadMessage.textContent = msg;
+  uploadMessage.className = "message error";
+  uploadMessage.scrollIntoView({ behavior: "smooth", block: "center" });
+}
 
 if (uploadForm) {
   uploadForm.addEventListener("submit", async (e) => {
@@ -1153,7 +1141,6 @@ if (uploadForm) {
     uploadMessage.textContent = "";
     uploadMessage.className = "message";
 
-    // --- Recogida de campos ---
     const fileInput = document.getElementById("photo-file");
 
     const ageInput = document.getElementById("age");
@@ -1188,117 +1175,97 @@ if (uploadForm) {
 
     const center = centerSelect ? centerSelect.value.trim() : "";
 
-    // --- Validaciones con mensajes claros ---
+    // Validaciones con showUploadError
 
     if (!fileInput || !fileInput.files || !fileInput.files[0]) {
-      uploadMessage.textContent = "Debes seleccionar una fotografía (archivo JPG).";
-      uploadMessage.classList.add("error");
+      showUploadError("Debes seleccionar una fotografía (archivo JPG).");
       return;
     }
 
     if (!ageRaw) {
-      uploadMessage.textContent = "Debes indicar tu edad.";
-      uploadMessage.classList.add("error");
+      showUploadError("Debes indicar tu edad.");
       return;
     }
     const ageValue = Number(ageRaw);
     if (!Number.isFinite(ageValue) || ageValue < 10 || ageValue > 100) {
-      uploadMessage.textContent = "Introduce una edad válida entre 10 y 100 años.";
-      uploadMessage.classList.add("error");
+      showUploadError("Introduce una edad válida entre 10 y 100 años.");
       return;
     }
 
     if (!gender) {
-      uploadMessage.textContent = "Debes indicar tu sexo.";
-      uploadMessage.classList.add("error");
+      showUploadError("Debes indicar tu sexo.");
       return;
     }
 
     if (!studies) {
-      uploadMessage.textContent = "Debes indicar tus estudios actuales.";
-      uploadMessage.classList.add("error");
+      showUploadError("Debes indicar tus estudios actuales.");
       return;
     }
 
     if (studies === "Bachillerato" && !bachType) {
-      uploadMessage.textContent = "Debes indicar la modalidad de Bachillerato.";
-      uploadMessage.classList.add("error");
+      showUploadError("Debes indicar la modalidad de Bachillerato.");
       return;
     }
 
     if (!studiesFather) {
-      uploadMessage.textContent = "Debes indicar los estudios de tu padre.";
-      uploadMessage.classList.add("error");
+      showUploadError("Debes indicar los estudios de tu padre.");
       return;
     }
 
     if (!studiesMother) {
-      uploadMessage.textContent = "Debes indicar los estudios de tu madre.";
-      uploadMessage.classList.add("error");
+      showUploadError("Debes indicar los estudios de tu madre.");
       return;
     }
 
     if (!rep) {
-      uploadMessage.textContent = "Debes indicar si has repetido curso alguna vez.";
-      uploadMessage.classList.add("error");
+      showUploadError("Debes indicar si has repetido curso alguna vez.");
       return;
     }
 
     if (!fail) {
-      uploadMessage.textContent = "Debes indicar si has suspendido alguna vez una asignatura.";
-      uploadMessage.classList.add("error");
+      showUploadError("Debes indicar si has suspendido alguna vez una asignatura.");
       return;
     }
 
     if (!pcsHomeRaw) {
-      uploadMessage.textContent = "Debes indicar cuántos ordenadores hay en tu casa.";
-      uploadMessage.classList.add("error");
+      showUploadError("Debes indicar cuántos ordenadores hay en tu casa.");
       return;
     }
     const pcsHome = Number(pcsHomeRaw);
     if (!Number.isFinite(pcsHome) || pcsHome < 0) {
-      uploadMessage.textContent = "Introduce un número válido de ordenadores (0 o más).";
-      uploadMessage.classList.add("error");
+      showUploadError("Introduce un número válido de ordenadores (0 o más).");
       return;
     }
 
     if (!pcRoom) {
-      uploadMessage.textContent = "Debes indicar si tienes ordenador en tu habitación.";
-      uploadMessage.classList.add("error");
+      showUploadError("Debes indicar si tienes ordenador en tu habitación.");
       return;
     }
 
     if (!pcFrequency) {
-      uploadMessage.textContent = "Debes indicar con qué frecuencia utilizas el ordenador.";
-      uploadMessage.classList.add("error");
+      showUploadError("Debes indicar con qué frecuencia utilizas el ordenador.");
       return;
     }
 
     if (!pcHoursRaw) {
-      uploadMessage.textContent = "Debes indicar cuántas horas al día usas el ordenador.";
-      uploadMessage.classList.add("error");
+      showUploadError("Debes indicar cuántas horas al día usas el ordenador.");
       return;
     }
     const pcHours = Number(pcHoursRaw);
     if (!Number.isFinite(pcHours) || pcHours < 0 || pcHours > 24) {
-      uploadMessage.textContent = "Introduce un número de horas válido (entre 0 y 24).";
-      uploadMessage.classList.add("error");
+      showUploadError("Introduce un número de horas válido (entre 0 y 24).");
       return;
     }
 
     if (globalConfig.askCenter && !center) {
-      uploadMessage.textContent = "Debes seleccionar tu centro educativo.";
-      uploadMessage.classList.add("error");
+      showUploadError("Debes seleccionar tu centro educativo.");
       return;
     }
 
     if (!privacyOk || !privacyOk.checked) {
-      uploadMessage.textContent = "Debes aceptar la política de privacidad para continuar.";
-      uploadMessage.classList.add("error");
+      showUploadError("Debes aceptar la política de privacidad para continuar.");
       return;
     }
-
-    // --- Si todo está correcto, continuamos ---
 
     const file = fileInput.files[0];
 
@@ -1309,13 +1276,10 @@ if (uploadForm) {
       const dataUrl = await resizeImage(file, 1920, 1920, 0.7);
 
       if (dataUrl.length > 950000) {
-        uploadMessage.textContent =
-          "La fotografía sigue siendo demasiado pesada incluso tras comprimirla. Prueba con una imagen más pequeña.";
-        uploadMessage.classList.add("error");
+        showUploadError("La fotografía sigue siendo demasiado pesada incluso tras comprimirla. Prueba con una imagen más pequeña.");
         return;
       }
 
-      // IA ligera
       let aiFeatures = null;
       let aiScore = null;
       try {
@@ -1326,7 +1290,6 @@ if (uploadForm) {
         console.error("Error IA ligera:", err);
       }
 
-      // IA local avanzada
       let localAdvanced = null;
       try {
         localAdvanced = await computeLocalAdvancedAnalysis(dataUrl);
@@ -1341,7 +1304,6 @@ if (uploadForm) {
         };
       }
 
-      // IA profunda
       let deepAI = null;
       try {
         deepAI = await computeDeepAI(dataUrl);
@@ -1420,7 +1382,6 @@ if (uploadForm) {
         }
       }
 
-      // Reset para que el siguiente alumno empiece "en blanco"
       uploadForm.reset();
       if (bachWrapper) bachWrapper.style.display = "none";
       if (typeof applyConfigToUpload === "function") {
@@ -1428,9 +1389,7 @@ if (uploadForm) {
       }
     } catch (err) {
       console.error("Error al procesar o guardar la fotografía:", err);
-      uploadMessage.textContent =
-        "Ha ocurrido un problema al procesar la fotografía. Es posible que el formato de la imagen no sea compatible en este dispositivo.";
-      uploadMessage.classList.add("error");
+      showUploadError("Ha ocurrido un problema al procesar la fotografía. Es posible que el formato de la imagen no sea compatible en este dispositivo.");
     }
   });
 }
@@ -1759,7 +1718,6 @@ async function loadAllPhotosWithRatings() {
           let rowHtml = `<td>${r.expertId || ""}</td>`;
           items.forEach((item, idx) => {
             let val = ratingsMap[item.id];
-            // Compatibilidad con datos antiguos tipo sub1, sub2...
             if (val === undefined && r[`sub${idx + 1}`] !== undefined) {
               val = r[`sub${idx + 1}`];
             }
@@ -1856,7 +1814,6 @@ if (exportCsvButton) {
       }));
 
       if (ratingsArr.length === 0) {
-        // Sin valoraciones: una fila por foto
         Object.entries(photos).forEach(([id, p]) => {
           const f = p.aiFeatures || {};
           const adv = p.localAdvanced || {};
@@ -1901,7 +1858,6 @@ if (exportCsvButton) {
           rows.push(base);
         });
       } else {
-        // Con valoraciones: una fila por valoración
         ratingsArr.forEach(r => {
           const p = photos[r.photoId];
           if (!p) return;
